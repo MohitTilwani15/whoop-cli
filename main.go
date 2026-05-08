@@ -52,8 +52,19 @@ type AgentContext struct {
 	Feedback          map[string]bool        `json:"feedback"`
 }
 
+type PageResponse struct {
+	Records   []any  `json:"records"`
+	NextToken string `json:"next_token"`
+}
+
+var osExit = os.Exit
+
 func main() {
-	stdout, stderr, code := Execute(os.Args[1:], TestEnv{})
+	osExit(runMain(os.Args[1:]))
+}
+
+func runMain(args []string) int {
+	stdout, stderr, code := Execute(args, TestEnv{})
 	if stdout != "" {
 		fmt.Fprint(os.Stdout, stdout)
 		if !strings.HasSuffix(stdout, "\n") {
@@ -66,7 +77,7 @@ func main() {
 			fmt.Fprintln(os.Stderr)
 		}
 	}
-	os.Exit(code)
+	return code
 }
 
 func Execute(args []string, env TestEnv) (string, string, int) { return ExecuteWithEnv(args, env) }
@@ -81,13 +92,15 @@ func ExecuteWithEnv(args []string, env TestEnv) (string, string, int) {
 	case "version":
 		return mustJSON(map[string]string{"version": version}), "", 0
 	case "workouts":
-		return handleListLike("workouts", args[1:])
+		return handleWorkouts(args[1:], env)
 	case "sleep":
-		return handleSleep(args[1:])
+		return handleSleep(args[1:], env)
 	case "cycles":
-		return handleCycles(args[1:])
+		return handleCycles(args[1:], env)
 	case "recovery":
-		return handleListLike("recovery", args[1:])
+		return handleListLike("recovery", args[1:], env)
+	case "mapping":
+		return handleMapping(args[1:], env)
 	case "user":
 		return handleUser(args[1:], env)
 	case "auth":
@@ -99,44 +112,71 @@ func ExecuteWithEnv(args []string, env TestEnv) (string, string, int) {
 	}
 }
 
-func handleListLike(resource string, args []string) (string, string, int) {
+func handleListLike(resource string, args []string, env TestEnv) (string, string, int) {
 	if len(args) == 0 || args[0] != "list" {
 		return "", errorJSON(CLIError{Code: "invalid_invocation", Message: fmt.Sprintf("%s requires subcommand list", resource), Example: fmt.Sprintf("whoop-pp-cli %s list --json", resource)}), 2
 	}
-	limit, stderr, code := parseLimit(args[1:], fmt.Sprintf("whoop-pp-cli %s list --limit 25 --json", resource))
-	if code != 0 {
-		return "", stderr, code
+	endpoint, ok := listEndpoint(resource)
+	if !ok {
+		return "", errorJSON(CLIError{Code: "invalid_invocation", Message: fmt.Sprintf("%s is not a list resource", resource)}), 2
 	}
-	return mustJSON(map[string]any{"records": []any{}, "next_cursor": nil, "truncated": false, "limit": limit}), "", 0
+	return apiList(env, endpoint, args[1:], fmt.Sprintf("whoop-pp-cli %s list --limit 25 --json", resource))
 }
 
-func handleSleep(args []string) (string, string, int) {
-	if len(args) == 0 {
+func handleWorkouts(args []string, env TestEnv) (string, string, int) {
+	pos := positionalArgs(args)
+	if len(pos) == 0 {
+		return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "workouts requires subcommand list or get", Example: "whoop-pp-cli workouts list --json"}), 2
+	}
+	if pos[0] == "list" {
+		return handleListLike("workouts", args, env)
+	}
+	if pos[0] == "get" && len(pos) >= 2 {
+		return apiGET(env, "/v2/activity/workout/"+pos[1])
+	}
+	return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "workouts get requires <workout-id>", Example: "whoop-pp-cli workouts get <workout-id> --json"}), 2
+}
+
+func handleSleep(args []string, env TestEnv) (string, string, int) {
+	pos := positionalArgs(args)
+	if len(pos) == 0 {
 		return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "sleep requires subcommand list or get", Example: "whoop-pp-cli sleep list --json"}), 2
 	}
-	if args[0] == "list" {
-		return handleListLike("sleep", args)
+	if pos[0] == "list" {
+		return handleListLike("sleep", args, env)
 	}
-	if args[0] == "get" && len(args) >= 2 {
-		return mustJSON(map[string]any{"id": args[1], "stub": true}), "", 0
+	if pos[0] == "get" && len(pos) >= 2 {
+		return apiGET(env, "/v2/activity/sleep/"+pos[1])
 	}
 	return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "sleep get requires <sleep-id>", Example: "whoop-pp-cli sleep get <sleep-id> --json"}), 2
 }
 
-func handleCycles(args []string) (string, string, int) {
-	if len(args) == 0 {
+func handleCycles(args []string, env TestEnv) (string, string, int) {
+	pos := positionalArgs(args)
+	if len(pos) == 0 {
 		return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "cycles requires subcommand list, get, sleep, or recovery", Example: "whoop-pp-cli cycles list --json"}), 2
 	}
-	if args[0] == "list" {
-		return handleListLike("cycles", args)
+	if pos[0] == "list" {
+		return handleListLike("cycles", args, env)
 	}
-	if args[0] == "get" && len(args) >= 2 {
-		return mustJSON(map[string]any{"id": args[1], "stub": true}), "", 0
+	if pos[0] == "get" && len(pos) >= 2 {
+		return apiGET(env, "/v2/cycle/"+pos[1])
 	}
-	if len(args) >= 3 && (args[0] == "sleep" || args[0] == "recovery") && args[1] == "get" {
-		return mustJSON(map[string]any{"cycle_id": args[2], "stub": true}), "", 0
+	if len(pos) >= 3 && pos[0] == "sleep" && pos[1] == "get" {
+		return apiGET(env, "/v2/cycle/"+pos[2]+"/sleep")
+	}
+	if len(pos) >= 3 && pos[0] == "recovery" && pos[1] == "get" {
+		return apiGET(env, "/v2/cycle/"+pos[2]+"/recovery")
 	}
 	return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "invalid cycles invocation", Example: "whoop-pp-cli cycles get <cycle-id> --json"}), 2
+}
+
+func handleMapping(args []string, env TestEnv) (string, string, int) {
+	pos := positionalArgs(args)
+	if len(pos) == 2 && pos[0] == "get" {
+		return apiGET(env, "/v1/activity-mapping/"+pos[1])
+	}
+	return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "mapping get requires <activity-v1-id>", Example: "whoop-pp-cli mapping get <activity-v1-id> --json"}), 2
 }
 
 func handleUser(args []string, env TestEnv) (string, string, int) {
@@ -216,6 +256,62 @@ func handleFeedback(args []string, env TestEnv) (string, string, int) {
 }
 
 func apiGET(env TestEnv, path string) (string, string, int) {
+	body, status, stderr, code := apiRequest(env, path, nil)
+	if code != 0 {
+		return "", stderr, code
+	}
+	_ = status
+	var anyJSON any
+	if err := json.Unmarshal(body, &anyJSON); err != nil {
+		return "", errorJSON(CLIError{Code: "invalid_json", Message: "WHOOP API returned non-JSON response"}), 5
+	}
+	return mustJSON(anyJSON), "", 0
+}
+
+func apiList(env TestEnv, path string, args []string, example string) (string, string, int) {
+	limit, stderr, code := parseLimit(args, example)
+	if code != 0 {
+		return "", stderr, code
+	}
+	params := map[string]string{"limit": strconv.Itoa(limit)}
+	if v := flagValue(args, "--start"); v != "" {
+		params["start"] = v
+	}
+	if v := flagValue(args, "--end"); v != "" {
+		params["end"] = v
+	}
+	if v := flagValue(args, "--cursor"); v != "" {
+		params["nextToken"] = v
+	}
+	all := hasFlag(args, "--all")
+	var records []any
+	var next string
+	for {
+		body, _, reqErr, reqCode := apiRequest(env, path, params)
+		if reqCode != 0 {
+			return "", reqErr, reqCode
+		}
+		var page PageResponse
+		if err := json.Unmarshal(body, &page); err != nil {
+			return "", errorJSON(CLIError{Code: "invalid_json", Message: "WHOOP API returned non-JSON page response"}), 5
+		}
+		records = append(records, page.Records...)
+		next = page.NextToken
+		if !all || next == "" {
+			break
+		}
+		params["nextToken"] = next
+	}
+	truncated := next != "" && !all
+	out := map[string]any{"records": records, "next_cursor": nil, "truncated": truncated, "limit": limit}
+	if next != "" && !all {
+		out["next_cursor"] = next
+		out["hint"] = "Use --cursor " + next + " or --all to fetch additional pages."
+	}
+	return mustJSON(out), "", 0
+}
+
+func apiRequest(env TestEnv, path string, params map[string]string) ([]byte, int, string, int) {
 	base := env.APIBase
 	if base == "" {
 		base = os.Getenv("WHOOP_API_BASE")
@@ -228,24 +324,31 @@ func apiGET(env TestEnv, path string) (string, string, int) {
 		token = os.Getenv("WHOOP_ACCESS_TOKEN")
 	}
 	if token == "" {
-		return "", errorJSON(CLIError{Code: "auth_missing", Message: "WHOOP access token is missing", Example: "Set WHOOP_ACCESS_TOKEN or run whoop-pp-cli auth login --json"}), 3
+		return nil, 0, errorJSON(CLIError{Code: "auth_missing", Message: "WHOOP access token is missing", Example: "Set WHOOP_ACCESS_TOKEN or run whoop-pp-cli auth login --json"}), 3
 	}
 	url := strings.TrimRight(base, "/") + path
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		return "", errorJSON(CLIError{Code: "invalid_request", Message: err.Error()}), 2
+		return nil, 0, errorJSON(CLIError{Code: "invalid_request", Message: err.Error()}), 2
 	}
+	q := req.URL.Query()
+	for k, v := range params {
+		if v != "" {
+			q.Set(k, v)
+		}
+	}
+	req.URL.RawQuery = q.Encode()
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "whoop-pp-cli/"+version)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", errorJSON(CLIError{Code: "network_error", Message: err.Error()}), 7
+		return nil, 0, errorJSON(CLIError{Code: "network_error", Message: err.Error()}), 7
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", errorJSON(CLIError{Code: "io_error", Message: err.Error()}), 1
+		return nil, resp.StatusCode, errorJSON(CLIError{Code: "io_error", Message: err.Error()}), 1
 	}
 	if resp.StatusCode >= 400 {
 		code := 4
@@ -256,13 +359,33 @@ func apiGET(env TestEnv, path string) (string, string, int) {
 		} else if resp.StatusCode >= 500 {
 			code = 5
 		}
-		return "", errorJSON(CLIError{Code: "whoop_api_error", Message: string(body), Got: resp.StatusCode}), code
+		return nil, resp.StatusCode, errorJSON(CLIError{Code: "whoop_api_error", Message: string(body), Got: resp.StatusCode}), code
 	}
-	var anyJSON any
-	if err := json.Unmarshal(body, &anyJSON); err != nil {
-		return "", errorJSON(CLIError{Code: "invalid_json", Message: "WHOOP API returned non-JSON response"}), 5
+	return body, resp.StatusCode, "", 0
+}
+
+func listEndpoint(resource string) (string, bool) {
+	switch resource {
+	case "workouts":
+		return "/v2/activity/workout", true
+	case "sleep":
+		return "/v2/activity/sleep", true
+	case "cycles":
+		return "/v2/cycle", true
+	case "recovery":
+		return "/v2/recovery", true
+	default:
+		return "", false
 	}
-	return mustJSON(anyJSON), "", 0
+}
+
+func flagValue(args []string, flag string) string {
+	for i := 0; i < len(args)-1; i++ {
+		if args[i] == flag {
+			return args[i+1]
+		}
+	}
+	return ""
 }
 
 func parseLimit(args []string, example string) (int, string, int) {
