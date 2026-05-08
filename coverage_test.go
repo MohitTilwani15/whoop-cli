@@ -17,7 +17,7 @@ func TestMainFunctionUsesOsExitHook(t *testing.T) {
 			t.Fatalf("expected exit 0, got %d", code)
 		}
 	}
-	os.Args = []string{"whoop-pp-cli", "version"}
+	os.Args = []string{"whoop-cli", "version"}
 	main()
 	if !called {
 		t.Fatal("expected osExit hook to be called")

@@ -1,4 +1,4 @@
-# whoop-pp-cli
+# whoop-cli
 
 Agent-native CLI for the WHOOP Developer API.
 
@@ -8,7 +8,7 @@ Agent-native CLI for the WHOOP Developer API.
 - Data goes to stdout; diagnostics and errors go to stderr.
 - List commands are bounded by default and use `--limit`, `--cursor`, `--all`, `--start`, and `--end`.
 - Destructive commands require `--force` and should support `--dry-run` as they mature.
-- Run `whoop-pp-cli agent-context` before using the CLI programmatically.
+- Run `whoop-cli agent-context` before using the CLI programmatically.
 - Errors are structured JSON and include valid ranges/values where possible.
 
 ## Current milestone

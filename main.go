@@ -121,25 +121,25 @@ func ExecuteWithEnv(args []string, env TestEnv) (string, string, int) {
 	case "feedback":
 		return handleFeedback(args[1:], env)
 	default:
-		return "", errorJSON(CLIError{Code: "unknown_command", Message: fmt.Sprintf("unknown command %q", args[0]), Example: "whoop-pp-cli agent-context"}), 2
+		return "", errorJSON(CLIError{Code: "unknown_command", Message: fmt.Sprintf("unknown command %q", args[0]), Example: "whoop-cli agent-context"}), 2
 	}
 }
 
 func handleListLike(resource string, args []string, env TestEnv) (string, string, int) {
 	if len(args) == 0 || args[0] != "list" {
-		return "", errorJSON(CLIError{Code: "invalid_invocation", Message: fmt.Sprintf("%s requires subcommand list", resource), Example: fmt.Sprintf("whoop-pp-cli %s list --json", resource)}), 2
+		return "", errorJSON(CLIError{Code: "invalid_invocation", Message: fmt.Sprintf("%s requires subcommand list", resource), Example: fmt.Sprintf("whoop-cli %s list --json", resource)}), 2
 	}
 	endpoint, ok := listEndpoint(resource)
 	if !ok {
 		return "", errorJSON(CLIError{Code: "invalid_invocation", Message: fmt.Sprintf("%s is not a list resource", resource)}), 2
 	}
-	return apiList(env, endpoint, args[1:], fmt.Sprintf("whoop-pp-cli %s list --limit 25 --json", resource))
+	return apiList(env, endpoint, args[1:], fmt.Sprintf("whoop-cli %s list --limit 25 --json", resource))
 }
 
 func handleWorkouts(args []string, env TestEnv) (string, string, int) {
 	pos := positionalArgs(args)
 	if len(pos) == 0 {
-		return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "workouts requires subcommand list or get", Example: "whoop-pp-cli workouts list --json"}), 2
+		return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "workouts requires subcommand list or get", Example: "whoop-cli workouts list --json"}), 2
 	}
 	if pos[0] == "list" {
 		return handleListLike("workouts", args, env)
@@ -147,13 +147,13 @@ func handleWorkouts(args []string, env TestEnv) (string, string, int) {
 	if pos[0] == "get" && len(pos) >= 2 {
 		return apiGET(env, "/v2/activity/workout/"+pos[1])
 	}
-	return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "workouts get requires <workout-id>", Example: "whoop-pp-cli workouts get <workout-id> --json"}), 2
+	return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "workouts get requires <workout-id>", Example: "whoop-cli workouts get <workout-id> --json"}), 2
 }
 
 func handleSleep(args []string, env TestEnv) (string, string, int) {
 	pos := positionalArgs(args)
 	if len(pos) == 0 {
-		return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "sleep requires subcommand list or get", Example: "whoop-pp-cli sleep list --json"}), 2
+		return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "sleep requires subcommand list or get", Example: "whoop-cli sleep list --json"}), 2
 	}
 	if pos[0] == "list" {
 		return handleListLike("sleep", args, env)
@@ -161,13 +161,13 @@ func handleSleep(args []string, env TestEnv) (string, string, int) {
 	if pos[0] == "get" && len(pos) >= 2 {
 		return apiGET(env, "/v2/activity/sleep/"+pos[1])
 	}
-	return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "sleep get requires <sleep-id>", Example: "whoop-pp-cli sleep get <sleep-id> --json"}), 2
+	return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "sleep get requires <sleep-id>", Example: "whoop-cli sleep get <sleep-id> --json"}), 2
 }
 
 func handleCycles(args []string, env TestEnv) (string, string, int) {
 	pos := positionalArgs(args)
 	if len(pos) == 0 {
-		return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "cycles requires subcommand list, get, sleep, or recovery", Example: "whoop-pp-cli cycles list --json"}), 2
+		return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "cycles requires subcommand list, get, sleep, or recovery", Example: "whoop-cli cycles list --json"}), 2
 	}
 	if pos[0] == "list" {
 		return handleListLike("cycles", args, env)
@@ -181,7 +181,7 @@ func handleCycles(args []string, env TestEnv) (string, string, int) {
 	if len(pos) >= 3 && pos[0] == "recovery" && pos[1] == "get" {
 		return apiGET(env, "/v2/cycle/"+pos[2]+"/recovery")
 	}
-	return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "invalid cycles invocation", Example: "whoop-pp-cli cycles get <cycle-id> --json"}), 2
+	return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "invalid cycles invocation", Example: "whoop-cli cycles get <cycle-id> --json"}), 2
 }
 
 func handleMapping(args []string, env TestEnv) (string, string, int) {
@@ -189,7 +189,7 @@ func handleMapping(args []string, env TestEnv) (string, string, int) {
 	if len(pos) == 2 && pos[0] == "get" {
 		return apiGET(env, "/v1/activity-mapping/"+pos[1])
 	}
-	return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "mapping get requires <activity-v1-id>", Example: "whoop-pp-cli mapping get <activity-v1-id> --json"}), 2
+	return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "mapping get requires <activity-v1-id>", Example: "whoop-cli mapping get <activity-v1-id> --json"}), 2
 }
 
 func handleUser(args []string, env TestEnv) (string, string, int) {
@@ -200,21 +200,21 @@ func handleUser(args []string, env TestEnv) (string, string, int) {
 	if len(pos) == 2 && pos[0] == "body" && pos[1] == "get" {
 		return apiGET(env, "/v2/user/measurement/body")
 	}
-	return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "user requires get or body get", Example: "whoop-pp-cli user get --json"}), 2
+	return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "user requires get or body get", Example: "whoop-cli user get --json"}), 2
 }
 
 func handleAuth(args []string, env TestEnv) (string, string, int) {
 	if len(args) == 0 {
-		return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "auth requires subcommand", Example: "whoop-pp-cli auth status --json"}), 2
+		return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "auth requires subcommand", Example: "whoop-cli auth status --json"}), 2
 	}
 	if args[0] == "revoke" {
 		if !hasFlag(args[1:], "--force") {
-			return "", errorJSON(CLIError{Code: "force_required", Message: "auth revoke is destructive and requires --force", Example: "whoop-pp-cli auth revoke --force --json"}), 2
+			return "", errorJSON(CLIError{Code: "force_required", Message: "auth revoke is destructive and requires --force", Example: "whoop-cli auth revoke --force --json"}), 2
 		}
 		return mustJSON(map[string]any{"revoked": true}), "", 0
 	}
 	if args[0] == "status" {
-		return mustJSON(map[string]any{"authenticated": false, "hint": "Run whoop-pp-cli auth login"}), "", 0
+		return mustJSON(map[string]any{"authenticated": false, "hint": "Run whoop-cli auth login"}), "", 0
 	}
 	if args[0] == "login" {
 		return handleAuthLogin(args[1:], env)
@@ -225,7 +225,7 @@ func handleAuth(args []string, env TestEnv) (string, string, int) {
 	if args[0] == "logout" {
 		return mustJSON(map[string]any{"command": "auth.logout", "stub": true}), "", 0
 	}
-	return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "unknown auth subcommand", Example: "whoop-pp-cli auth status --json"}), 2
+	return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "unknown auth subcommand", Example: "whoop-cli auth status --json"}), 2
 }
 
 type OAuthToken struct {
@@ -246,10 +246,10 @@ func handleAuthLogin(args []string, env TestEnv) (string, string, int) {
 	authURL := firstNonEmpty(flagValue(args, "--auth-url"), "https://api.prod.whoop.com/oauth/oauth2/auth")
 	tokenURL := firstNonEmpty(flagValue(args, "--token-url"), "https://api.prod.whoop.com/oauth/oauth2/token")
 	if clientID == "" || clientSecret == "" {
-		return "", errorJSON(CLIError{Code: "missing_oauth_credentials", Message: "auth login requires --client-id and --client-secret or WHOOP_CLIENT_ID/WHOOP_CLIENT_SECRET", Example: "whoop-pp-cli auth login --client-id <id> --client-secret <secret> --json"}), 3
+		return "", errorJSON(CLIError{Code: "missing_oauth_credentials", Message: "auth login requires --client-id and --client-secret or WHOOP_CLIENT_ID/WHOOP_CLIENT_SECRET", Example: "whoop-cli auth login --client-id <id> --client-secret <secret> --json"}), 3
 	}
 	if len(state) != 8 {
-		return "", errorJSON(CLIError{Code: "invalid_flag_value", Message: "--state must be exactly 8 characters", Flag: "--state", Got: state, Example: "whoop-pp-cli auth login --state abcdefgh --json"}), 2
+		return "", errorJSON(CLIError{Code: "invalid_flag_value", Message: "--state must be exactly 8 characters", Flag: "--state", Got: state, Example: "whoop-cli auth login --state abcdefgh --json"}), 2
 	}
 	authorize := buildAuthorizeURL(authURL, clientID, redirectURI, scopes, state)
 	if hasFlag(args, "--print-url") {
@@ -352,11 +352,11 @@ func handleAuthRefresh(args []string, env TestEnv) (string, string, int) {
 	clientSecret := firstNonEmpty(flagValue(args, "--client-secret"), os.Getenv("WHOOP_CLIENT_SECRET"))
 	tokenURL := firstNonEmpty(flagValue(args, "--token-url"), "https://api.prod.whoop.com/oauth/oauth2/token")
 	if clientID == "" || clientSecret == "" {
-		return "", errorJSON(CLIError{Code: "missing_oauth_credentials", Message: "auth refresh requires --client-id and --client-secret or WHOOP_CLIENT_ID/WHOOP_CLIENT_SECRET", Example: "whoop-pp-cli auth refresh --client-id <id> --client-secret <secret> --json"}), 3
+		return "", errorJSON(CLIError{Code: "missing_oauth_credentials", Message: "auth refresh requires --client-id and --client-secret or WHOOP_CLIENT_ID/WHOOP_CLIENT_SECRET", Example: "whoop-cli auth refresh --client-id <id> --client-secret <secret> --json"}), 3
 	}
 	oldTok, err := loadSavedToken(env)
 	if err != nil || oldTok.RefreshToken == "" {
-		return "", errorJSON(CLIError{Code: "refresh_token_missing", Message: "WHOOP refresh token is missing; run whoop-pp-cli auth login with offline scope", Example: "whoop-pp-cli auth login --scopes \"read:profile read:body_measurement read:cycles read:recovery read:sleep read:workout offline\" --json"}), 3
+		return "", errorJSON(CLIError{Code: "refresh_token_missing", Message: "WHOOP refresh token is missing; run whoop-cli auth login with offline scope", Example: "whoop-cli auth login --scopes \"read:profile read:body_measurement read:cycles read:recovery read:sleep read:workout offline\" --json"}), 3
 	}
 	newTok, stderr, exit := exchangeRefreshToken(tokenURL, clientID, clientSecret, oldTok.RefreshToken)
 	if exit != 0 {
@@ -435,7 +435,7 @@ func tokenConfigDir(env TestEnv) string {
 		return env.ConfigDir
 	}
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".config", "whoop-pp-cli")
+	return filepath.Join(home, ".config", "whoop-cli")
 }
 
 func randomState() string {
@@ -457,17 +457,17 @@ func firstNonEmpty(values ...string) string {
 
 func handleFeedback(args []string, env TestEnv) (string, string, int) {
 	if len(args) == 0 {
-		return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "feedback requires create or list", Example: "whoop-pp-cli feedback create \"message\" --json"}), 2
+		return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "feedback requires create or list", Example: "whoop-cli feedback create \"message\" --json"}), 2
 	}
 	dir := env.ConfigDir
 	if dir == "" {
 		home, _ := os.UserHomeDir()
-		dir = filepath.Join(home, ".local", "share", "whoop-pp-cli")
+		dir = filepath.Join(home, ".local", "share", "whoop-cli")
 	}
 	path := filepath.Join(dir, "feedback.jsonl")
 	if args[0] == "create" {
 		if len(args) < 2 || strings.HasPrefix(args[1], "--") {
-			return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "feedback create requires text", Example: "whoop-pp-cli feedback create \"error should enumerate values\" --json"}), 2
+			return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "feedback create requires text", Example: "whoop-cli feedback create \"error should enumerate values\" --json"}), 2
 		}
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return "", errorJSON(CLIError{Code: "io_error", Message: err.Error()}), 1
@@ -498,7 +498,7 @@ func handleFeedback(args []string, env TestEnv) (string, string, int) {
 		}
 		return mustJSON(map[string]any{"records": records}), "", 0
 	}
-	return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "feedback requires create or list", Example: "whoop-pp-cli feedback list --json"}), 2
+	return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "feedback requires create or list", Example: "whoop-cli feedback list --json"}), 2
 }
 
 func apiGET(env TestEnv, path string) (string, string, int) {
@@ -573,7 +573,7 @@ func apiRequest(env TestEnv, path string, params map[string]string) ([]byte, int
 		token = loadSavedAccessToken(env)
 	}
 	if token == "" {
-		return nil, 0, errorJSON(CLIError{Code: "auth_missing", Message: "WHOOP access token is missing", Example: "Set WHOOP_ACCESS_TOKEN or run whoop-pp-cli auth login --json"}), 3
+		return nil, 0, errorJSON(CLIError{Code: "auth_missing", Message: "WHOOP access token is missing", Example: "Set WHOOP_ACCESS_TOKEN or run whoop-cli auth login --json"}), 3
 	}
 	url := strings.TrimRight(base, "/") + path
 	req, err := http.NewRequest(http.MethodGet, url, nil)
@@ -589,7 +589,7 @@ func apiRequest(env TestEnv, path string, params map[string]string) ([]byte, int
 	req.URL.RawQuery = q.Encode()
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "whoop-pp-cli/"+version)
+	req.Header.Set("User-Agent", "whoop-cli/"+version)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, 0, errorJSON(CLIError{Code: "network_error", Message: err.Error()}), 7
@@ -661,23 +661,23 @@ func parseLimit(args []string, example string) (int, string, int) {
 
 func buildAgentContext(env TestEnv) AgentContext {
 	commands := map[string]CommandSpec{
-		"user.get":            {Usage: "whoop-pp-cli user get --json", RequiresAuth: "user_oauth", RequiredScopes: []string{"read:profile"}, Flags: dataFlags()},
-		"user.body.get":       {Usage: "whoop-pp-cli user body get --json", RequiresAuth: "user_oauth", RequiredScopes: []string{"read:body_measurement"}, Flags: dataFlags()},
-		"workouts.list":       {Usage: "whoop-pp-cli workouts list [flags]", RequiresAuth: "user_oauth", RequiredScopes: []string{"read:workout"}, Flags: listFlags()},
-		"workouts.get":        {Usage: "whoop-pp-cli workouts get <workout-id> --json", RequiresAuth: "user_oauth", RequiredScopes: []string{"read:workout"}, Flags: dataFlags()},
-		"sleep.list":          {Usage: "whoop-pp-cli sleep list [flags]", RequiresAuth: "user_oauth", RequiredScopes: []string{"read:sleep"}, Flags: listFlags()},
-		"sleep.get":           {Usage: "whoop-pp-cli sleep get <sleep-id> --json", RequiresAuth: "user_oauth", RequiredScopes: []string{"read:sleep"}, Flags: dataFlags()},
-		"cycles.list":         {Usage: "whoop-pp-cli cycles list [flags]", RequiresAuth: "user_oauth", RequiredScopes: []string{"read:cycles"}, Flags: listFlags()},
-		"cycles.get":          {Usage: "whoop-pp-cli cycles get <cycle-id> --json", RequiresAuth: "user_oauth", RequiredScopes: []string{"read:cycles"}, Flags: dataFlags()},
-		"cycles.sleep.get":    {Usage: "whoop-pp-cli cycles sleep get <cycle-id> --json", RequiresAuth: "user_oauth", RequiredScopes: []string{"read:sleep"}, Flags: dataFlags()},
-		"cycles.recovery.get": {Usage: "whoop-pp-cli cycles recovery get <cycle-id> --json", RequiresAuth: "user_oauth", RequiredScopes: []string{"read:recovery"}, Flags: dataFlags()},
-		"recovery.list":       {Usage: "whoop-pp-cli recovery list [flags]", RequiresAuth: "user_oauth", RequiredScopes: []string{"read:recovery"}, Flags: listFlags()},
-		"auth.revoke":         {Usage: "whoop-pp-cli auth revoke --force --json", RequiresAuth: "user_oauth", Destructive: true, Flags: map[string]any{"--json": map[string]any{"type": "bool"}, "--force": map[string]any{"type": "bool", "required": true}, "--dry-run": map[string]any{"type": "bool"}}},
-		"feedback.create":     {Usage: "whoop-pp-cli feedback create <text> --json", Flags: dataFlags()},
+		"user.get":            {Usage: "whoop-cli user get --json", RequiresAuth: "user_oauth", RequiredScopes: []string{"read:profile"}, Flags: dataFlags()},
+		"user.body.get":       {Usage: "whoop-cli user body get --json", RequiresAuth: "user_oauth", RequiredScopes: []string{"read:body_measurement"}, Flags: dataFlags()},
+		"workouts.list":       {Usage: "whoop-cli workouts list [flags]", RequiresAuth: "user_oauth", RequiredScopes: []string{"read:workout"}, Flags: listFlags()},
+		"workouts.get":        {Usage: "whoop-cli workouts get <workout-id> --json", RequiresAuth: "user_oauth", RequiredScopes: []string{"read:workout"}, Flags: dataFlags()},
+		"sleep.list":          {Usage: "whoop-cli sleep list [flags]", RequiresAuth: "user_oauth", RequiredScopes: []string{"read:sleep"}, Flags: listFlags()},
+		"sleep.get":           {Usage: "whoop-cli sleep get <sleep-id> --json", RequiresAuth: "user_oauth", RequiredScopes: []string{"read:sleep"}, Flags: dataFlags()},
+		"cycles.list":         {Usage: "whoop-cli cycles list [flags]", RequiresAuth: "user_oauth", RequiredScopes: []string{"read:cycles"}, Flags: listFlags()},
+		"cycles.get":          {Usage: "whoop-cli cycles get <cycle-id> --json", RequiresAuth: "user_oauth", RequiredScopes: []string{"read:cycles"}, Flags: dataFlags()},
+		"cycles.sleep.get":    {Usage: "whoop-cli cycles sleep get <cycle-id> --json", RequiresAuth: "user_oauth", RequiredScopes: []string{"read:sleep"}, Flags: dataFlags()},
+		"cycles.recovery.get": {Usage: "whoop-cli cycles recovery get <cycle-id> --json", RequiresAuth: "user_oauth", RequiredScopes: []string{"read:recovery"}, Flags: dataFlags()},
+		"recovery.list":       {Usage: "whoop-cli recovery list [flags]", RequiresAuth: "user_oauth", RequiredScopes: []string{"read:recovery"}, Flags: listFlags()},
+		"auth.revoke":         {Usage: "whoop-cli auth revoke --force --json", RequiresAuth: "user_oauth", Destructive: true, Flags: map[string]any{"--json": map[string]any{"type": "bool"}, "--force": map[string]any{"type": "bool", "required": true}, "--dry-run": map[string]any{"type": "bool"}}},
+		"feedback.create":     {Usage: "whoop-cli feedback create <text> --json", Flags: dataFlags()},
 	}
 	return AgentContext{
 		SchemaVersion:     "1",
-		CLI:               map[string]string{"name": "whoop-pp-cli", "version": version},
+		CLI:               map[string]string{"name": "whoop-cli", "version": version},
 		API:               map[string]any{"base_url": "https://api.prod.whoop.com/developer", "auth": map[string]any{"oauth_authorization_url": "https://api.prod.whoop.com/oauth/oauth2/auth", "oauth_token_url": "https://api.prod.whoop.com/oauth/oauth2/token", "scopes": []string{"read:profile", "read:body_measurement", "read:cycles", "read:recovery", "read:sleep", "read:workout"}}},
 		Conventions:       map[string]any{"json_flag": "--json", "destructive_bypass_flag": "--force", "non_interactive_flag": "--no-input", "pagination": map[string]string{"limit_flag": "--limit", "cursor_flag": "--cursor", "all_flag": "--all"}},
 		AvailableProfiles: []string{"default"},
@@ -734,5 +734,5 @@ func appendFile(path, text string) error {
 	return err
 }
 func helpText() string {
-	return "whoop-pp-cli: agent-native CLI for WHOOP\n\nUse --json for data commands. Run `whoop-pp-cli agent-context` for machine-readable command schema.\n"
+	return "whoop-cli: agent-native CLI for WHOOP\n\nUse --json for data commands. Run `whoop-cli agent-context` for machine-readable command schema.\n"
 }

@@ -1,5 +1,5 @@
 schema_version: "1"
-name: whoop-pp-cli
+name: whoop-cli
 version: 0.1.0
 vocabulary_policy:
   canonical_verbs: [get, list, create, update, delete]

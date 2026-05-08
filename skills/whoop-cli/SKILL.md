@@ -1,10 +1,10 @@
 ---
-name: whoop-pp-cli
-description: Use whoop-pp-cli to fetch WHOOP profile, body, sleep, recovery, cycles, and workouts with agent-native JSON output.
+name: whoop-cli
+description: Use whoop-cli to fetch WHOOP profile, body, sleep, recovery, cycles, and workouts with agent-native JSON output.
 version: 0.1.0
 ---
 
-# whoop-pp-cli
+# whoop-cli
 
 ## When to use
 
@@ -15,7 +15,7 @@ Use this skill when an agent needs WHOOP data from the local CLI.
 Always inspect the machine-readable surface first:
 
 ```bash
-whoop-pp-cli agent-context
+whoop-cli agent-context
 ```
 
 ## Conventions
@@ -31,19 +31,19 @@ whoop-pp-cli agent-context
 ### Basic profile
 
 ```bash
-WHOOP_ACCESS_TOKEN=... whoop-pp-cli user get --json
+WHOOP_ACCESS_TOKEN=... whoop-cli user get --json
 ```
 
 ### Body measurements
 
 ```bash
-WHOOP_ACCESS_TOKEN=... whoop-pp-cli user body get --json
+WHOOP_ACCESS_TOKEN=... whoop-cli user body get --json
 ```
 
 ### Workouts
 
 ```bash
-WHOOP_ACCESS_TOKEN=... whoop-pp-cli workouts list --start 2026-05-01T00:00:00Z --end 2026-05-08T00:00:00Z --json
+WHOOP_ACCESS_TOKEN=... whoop-cli workouts list --start 2026-05-01T00:00:00Z --end 2026-05-08T00:00:00Z --json
 ```
 
 ## Feedback
@@ -51,5 +51,5 @@ WHOOP_ACCESS_TOKEN=... whoop-pp-cli workouts list --start 2026-05-01T00:00:00Z -
 If the CLI is painful or an error message is unhelpful, record feedback:
 
 ```bash
-whoop-pp-cli feedback create "describe friction" --json
+whoop-cli feedback create "describe friction" --json
 ```

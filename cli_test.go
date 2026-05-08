@@ -52,7 +52,7 @@ func TestListLimitRejectsAboveWhoopMaximumWithTeachingError(t *testing.T) {
 	if !strings.Contains(stderr, "--limit must be between 1 and 25") {
 		t.Fatalf("stderr should teach valid range, got %q", stderr)
 	}
-	if !strings.Contains(stderr, "whoop-pp-cli workouts list --limit 25 --json") {
+	if !strings.Contains(stderr, "whoop-cli workouts list --limit 25 --json") {
 		t.Fatalf("stderr should include working example, got %q", stderr)
 	}
 }

@@ -96,7 +96,7 @@ func TestOAuthRemainingBranchesForCoverage(t *testing.T) {
 	// saveToken default HOME branch
 	t.Setenv("HOME", t.TempDir())
 	path, err := saveToken(TestEnv{}, OAuthToken{AccessToken: "home-token"})
-	if err != nil || !strings.Contains(path, ".config/whoop-pp-cli/token.json") {
+	if err != nil || !strings.Contains(path, ".config/whoop-cli/token.json") {
 		t.Fatalf("expected default token path, path=%s err=%v", path, err)
 	}
 
