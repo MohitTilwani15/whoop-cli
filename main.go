@@ -65,8 +65,12 @@ type PageResponse struct {
 
 var osExit = os.Exit
 var oauthCallbackTimeout = 3 * time.Minute
-var openBrowser = func(target string) error { return exec.Command("open", target).Start() }
+var execOpenCommand = defaultOpenCommand
+var saveTokenFunc = saveToken
 var randRead = rand.Read
+
+func defaultOpenCommand(target string) *exec.Cmd { return exec.Command("open", target) }
+func openBrowser(target string) error            { return execOpenCommand(target).Start() }
 
 func main() {
 	osExit(runMain(os.Args[1:]))
@@ -215,8 +219,11 @@ func handleAuth(args []string, env TestEnv) (string, string, int) {
 	if args[0] == "login" {
 		return handleAuthLogin(args[1:], env)
 	}
-	if args[0] == "refresh" || args[0] == "logout" {
-		return mustJSON(map[string]any{"command": "auth." + args[0], "stub": true}), "", 0
+	if args[0] == "refresh" {
+		return handleAuthRefresh(args[1:], env)
+	}
+	if args[0] == "logout" {
+		return mustJSON(map[string]any{"command": "auth.logout", "stub": true}), "", 0
 	}
 	return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "unknown auth subcommand", Example: "whoop-pp-cli auth status --json"}), 2
 }
@@ -263,7 +270,7 @@ func handleAuthLogin(args []string, env TestEnv) (string, string, int) {
 	if exit != 0 {
 		return "", stderr, exit
 	}
-	path, err := saveToken(env, tok)
+	path, err := saveTokenFunc(env, tok)
 	if err != nil {
 		return "", errorJSON(CLIError{Code: "io_error", Message: err.Error()}), 1
 	}
@@ -337,6 +344,41 @@ func exchangeOAuthCode(tokenURL, clientID, clientSecret, redirectURI, code strin
 	form.Set("client_id", clientID)
 	form.Set("client_secret", clientSecret)
 	form.Set("redirect_uri", redirectURI)
+	return exchangeTokenForm(tokenURL, form)
+}
+
+func handleAuthRefresh(args []string, env TestEnv) (string, string, int) {
+	clientID := firstNonEmpty(flagValue(args, "--client-id"), os.Getenv("WHOOP_CLIENT_ID"))
+	clientSecret := firstNonEmpty(flagValue(args, "--client-secret"), os.Getenv("WHOOP_CLIENT_SECRET"))
+	tokenURL := firstNonEmpty(flagValue(args, "--token-url"), "https://api.prod.whoop.com/oauth/oauth2/token")
+	if clientID == "" || clientSecret == "" {
+		return "", errorJSON(CLIError{Code: "missing_oauth_credentials", Message: "auth refresh requires --client-id and --client-secret or WHOOP_CLIENT_ID/WHOOP_CLIENT_SECRET", Example: "whoop-pp-cli auth refresh --client-id <id> --client-secret <secret> --json"}), 3
+	}
+	oldTok, err := loadSavedToken(env)
+	if err != nil || oldTok.RefreshToken == "" {
+		return "", errorJSON(CLIError{Code: "refresh_token_missing", Message: "WHOOP refresh token is missing; run whoop-pp-cli auth login with offline scope", Example: "whoop-pp-cli auth login --scopes \"read:profile read:body_measurement read:cycles read:recovery read:sleep read:workout offline\" --json"}), 3
+	}
+	newTok, stderr, exit := exchangeRefreshToken(tokenURL, clientID, clientSecret, oldTok.RefreshToken)
+	if exit != 0 {
+		return "", stderr, exit
+	}
+	path, err := saveTokenFunc(env, newTok)
+	if err != nil {
+		return "", errorJSON(CLIError{Code: "io_error", Message: err.Error()}), 1
+	}
+	return mustJSON(map[string]any{"token_refreshed": true, "path": path, "expires_in": newTok.ExpiresIn, "scope": newTok.Scope}), "", 0
+}
+
+func exchangeRefreshToken(tokenURL, clientID, clientSecret, refreshToken string) (OAuthToken, string, int) {
+	form := url.Values{}
+	form.Set("grant_type", "refresh_token")
+	form.Set("refresh_token", refreshToken)
+	form.Set("client_id", clientID)
+	form.Set("client_secret", clientSecret)
+	return exchangeTokenForm(tokenURL, form)
+}
+
+func exchangeTokenForm(tokenURL string, form url.Values) (OAuthToken, string, int) {
 	resp, err := http.PostForm(tokenURL, form)
 	if err != nil {
 		return OAuthToken{}, errorJSON(CLIError{Code: "network_error", Message: err.Error()}), 7
@@ -368,16 +410,24 @@ func saveToken(env TestEnv, tok OAuthToken) (string, error) {
 }
 
 func loadSavedAccessToken(env TestEnv) string {
-	path := filepath.Join(tokenConfigDir(env), "token.json")
-	b, err := os.ReadFile(path)
+	tok, err := loadSavedToken(env)
 	if err != nil {
 		return ""
 	}
+	return tok.AccessToken
+}
+
+func loadSavedToken(env TestEnv) (OAuthToken, error) {
+	path := filepath.Join(tokenConfigDir(env), "token.json")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return OAuthToken{}, err
+	}
 	var tok OAuthToken
 	if err := json.Unmarshal(b, &tok); err != nil {
-		return ""
+		return OAuthToken{}, err
 	}
-	return tok.AccessToken
+	return tok, nil
 }
 
 func tokenConfigDir(env TestEnv) string {

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -15,13 +16,13 @@ import (
 
 func TestOAuthRemainingBranchesForCoverage(t *testing.T) {
 	// open-browser branch + callback error branch through auth login
-	oldOpen := openBrowser
+	oldExec := execOpenCommand
 	oldTimeout := oauthCallbackTimeout
 	opened := false
-	openBrowser = func(string) error { opened = true; return nil }
+	execOpenCommand = func(string) *exec.Cmd { opened = true; return exec.Command("/usr/bin/true") }
 	oauthCallbackTimeout = 10 * time.Millisecond
 	_, stderr, code := ExecuteWithEnv([]string{"auth", "login", "--client-id", "cid", "--client-secret", "secret", "--redirect-uri", freeLocalRedirect(t), "--state", "abcdefgh", "--json"}, TestEnv{})
-	openBrowser = oldOpen
+	execOpenCommand = oldExec
 	oauthCallbackTimeout = oldTimeout
 	if !opened || code != 1 || !strings.Contains(stderr, "oauth_callback_error") {
 		t.Fatalf("expected open + callback timeout, opened=%v code=%d stderr=%s", opened, code, stderr)

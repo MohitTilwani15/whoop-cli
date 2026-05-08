@@ -62,7 +62,7 @@ func TestRemainingBranchesForCoverage(t *testing.T) {
 }
 
 func TestAPIListPropagatesRequestErrorAndDefaultBaseBranches(t *testing.T) {
-	_, stderr, code := apiList(TestEnv{}, "/x", nil, "example")
+	_, stderr, code := apiList(TestEnv{ConfigDir: t.TempDir()}, "/x", nil, "example")
 	if code != 3 || stderr == "" {
 		t.Fatalf("expected auth missing from apiList")
 	}

@@ -34,7 +34,7 @@ func TestUserGetCallsWhoopProfileEndpointWithBearerToken(t *testing.T) {
 }
 
 func TestMissingAuthReturnsConfigurationError(t *testing.T) {
-	stdout, stderr, code := ExecuteWithEnv([]string{"user", "get", "--json"}, TestEnv{APIBase: "http://example.invalid"})
+	stdout, stderr, code := ExecuteWithEnv([]string{"user", "get", "--json"}, TestEnv{APIBase: "http://example.invalid", ConfigDir: t.TempDir()})
 	if stdout != "" {
 		t.Fatalf("expected no stdout, got %s", stdout)
 	}
