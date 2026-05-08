@@ -1,0 +1,90 @@
+schema_version: "1"
+name: whoop-pp-cli
+version: 0.1.0
+vocabulary_policy:
+  canonical_verbs: [get, list, create, update, delete]
+  banned_terms:
+    - ls
+    - info
+    - --format=json
+    - --skip-confirmations
+    - --yes
+  required_flags:
+    data_commands: [--json]
+    destructive_commands: [--force, --dry-run]
+    list_commands: [--limit, --cursor, --all, --start, --end]
+conventions:
+  json_flag: --json
+  destructive_bypass_flag: --force
+  non_interactive_flag: --no-input
+  pagination:
+    limit_flag: --limit
+    cursor_flag: --cursor
+    all_flag: --all
+api:
+  base_url: https://api.prod.whoop.com/developer
+  oauth_authorization_url: https://api.prod.whoop.com/oauth/oauth2/auth
+  oauth_token_url: https://api.prod.whoop.com/oauth/oauth2/token
+  scopes:
+    - read:profile
+    - read:body_measurement
+    - read:cycles
+    - read:recovery
+    - read:sleep
+    - read:workout
+commands:
+  user.get:
+    endpoint: GET /v2/user/profile/basic
+    auth: user_oauth
+    scopes: [read:profile]
+  user.body.get:
+    endpoint: GET /v2/user/measurement/body
+    auth: user_oauth
+    scopes: [read:body_measurement]
+  cycles.list:
+    endpoint: GET /v2/cycle
+    auth: user_oauth
+    scopes: [read:cycles]
+    paginated: true
+  cycles.get:
+    endpoint: GET /v2/cycle/{cycleId}
+    auth: user_oauth
+    scopes: [read:cycles]
+  cycles.sleep.get:
+    endpoint: GET /v2/cycle/{cycleId}/sleep
+    auth: user_oauth
+    scopes: [read:sleep]
+  cycles.recovery.get:
+    endpoint: GET /v2/cycle/{cycleId}/recovery
+    auth: user_oauth
+    scopes: [read:recovery]
+  recovery.list:
+    endpoint: GET /v2/recovery
+    auth: user_oauth
+    scopes: [read:recovery]
+    paginated: true
+  sleep.list:
+    endpoint: GET /v2/activity/sleep
+    auth: user_oauth
+    scopes: [read:sleep]
+    paginated: true
+  sleep.get:
+    endpoint: GET /v2/activity/sleep/{sleepId}
+    auth: user_oauth
+    scopes: [read:sleep]
+  workouts.list:
+    endpoint: GET /v2/activity/workout
+    auth: user_oauth
+    scopes: [read:workout]
+    paginated: true
+  workouts.get:
+    endpoint: GET /v2/activity/workout/{workoutId}
+    auth: user_oauth
+    scopes: [read:workout]
+  mapping.get:
+    endpoint: GET /v1/activity-mapping/{activityV1Id}
+    auth: user_oauth
+  auth.revoke:
+    endpoint: DELETE /v2/user/access
+    auth: user_oauth
+    destructive: true
