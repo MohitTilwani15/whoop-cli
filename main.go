@@ -358,17 +358,34 @@ func exchangeOAuthCode(tokenURL, clientID, clientSecret, redirectURI, code strin
 }
 
 func saveToken(env TestEnv, tok OAuthToken) (string, error) {
-	dir := env.ConfigDir
-	if dir == "" {
-		home, _ := os.UserHomeDir()
-		dir = filepath.Join(home, ".config", "whoop-pp-cli")
-	}
+	dir := tokenConfigDir(env)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
 	path := filepath.Join(dir, "token.json")
 	b, _ := json.MarshalIndent(tok, "", "  ")
 	return path, os.WriteFile(path, b, 0o600)
+}
+
+func loadSavedAccessToken(env TestEnv) string {
+	path := filepath.Join(tokenConfigDir(env), "token.json")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	var tok OAuthToken
+	if err := json.Unmarshal(b, &tok); err != nil {
+		return ""
+	}
+	return tok.AccessToken
+}
+
+func tokenConfigDir(env TestEnv) string {
+	if env.ConfigDir != "" {
+		return env.ConfigDir
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".config", "whoop-pp-cli")
 }
 
 func randomState() string {
@@ -501,6 +518,9 @@ func apiRequest(env TestEnv, path string, params map[string]string) ([]byte, int
 	token := env.AccessToken
 	if token == "" {
 		token = os.Getenv("WHOOP_ACCESS_TOKEN")
+	}
+	if token == "" {
+		token = loadSavedAccessToken(env)
 	}
 	if token == "" {
 		return nil, 0, errorJSON(CLIError{Code: "auth_missing", Message: "WHOOP access token is missing", Example: "Set WHOOP_ACCESS_TOKEN or run whoop-pp-cli auth login --json"}), 3

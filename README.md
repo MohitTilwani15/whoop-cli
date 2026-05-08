@@ -48,9 +48,8 @@ go test ./...
 
 ## Next implementation steps
 
-1. Load saved token automatically for API calls.
-2. Implement OAuth refresh with WHOOP refresh-token rotation.
-3. Add profile save/list/get/delete.
-4. Move schema to the command generator instead of duplicating command metadata in Go.
-5. Add cache and sync job ledger.
-6. Add `--deliver` for exports.
+1. Implement OAuth refresh with WHOOP refresh-token rotation.
+2. Add profile save/list/get/delete.
+3. Move schema to the command generator instead of duplicating command metadata in Go.
+4. Add cache and sync job ledger.
+5. Add `--deliver` for exports.
