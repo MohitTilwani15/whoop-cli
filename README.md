@@ -13,23 +13,28 @@ Agent-native CLI for the WHOOP Developer API.
 
 ## Current milestone
 
-This repo has the first working skeleton:
+This repo has the first working implementation:
 
 - `agent-context` with versioned machine-readable CLI shape.
+- `auth login` with WHOOP authorization URL generation, localhost callback capture, token exchange, and local token storage.
 - WHOOP API client path for `user get` and `user body get` using bearer token auth.
-- Agent-native list behavior skeleton for workouts/sleep/cycles/recovery.
+- Real paginated list support for workouts/sleep/cycles/recovery.
+- Get support for workouts, sleep, cycles, cycle sleep, cycle recovery, and v1 activity mapping.
 - Destructive `auth revoke` guarded by `--force`.
 - Local `feedback create/list` JSONL loop.
 - Schema file that codifies vocabulary and endpoint coverage.
-- Tests for the above.
+- 100% statement coverage in tests.
 
 ## Usage
 
 ```bash
 go run . agent-context
+go run . auth login --client-id "$WHOOP_CLIENT_ID" --client-secret "$WHOOP_CLIENT_SECRET" --redirect-uri http://localhost:8787/callback --json
 WHOOP_ACCESS_TOKEN=... go run . user get --json
 WHOOP_ACCESS_TOKEN=... go run . user body get --json
 go run . workouts list --limit 10 --json
+go run . sleep list --all --json
+go run . mapping get 12345678 --json
 go run . auth revoke --force --json
 go run . feedback create "error should enumerate values" --json
 go run . feedback list --json
@@ -43,9 +48,9 @@ go test ./...
 
 ## Next implementation steps
 
-1. Move schema to the command generator instead of duplicating command metadata in Go.
-2. Implement OAuth authorization-code login and refresh.
-3. Implement real paginated API calls for cycles/recovery/sleep/workouts.
-4. Add profile save/list/get/delete.
+1. Load saved token automatically for API calls.
+2. Implement OAuth refresh with WHOOP refresh-token rotation.
+3. Add profile save/list/get/delete.
+4. Move schema to the command generator instead of duplicating command metadata in Go.
 5. Add cache and sync job ledger.
 6. Add `--deliver` for exports.

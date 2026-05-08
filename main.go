@@ -1,11 +1,17 @@
 package main
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -58,6 +64,9 @@ type PageResponse struct {
 }
 
 var osExit = os.Exit
+var oauthCallbackTimeout = 3 * time.Minute
+var openBrowser = func(target string) error { return exec.Command("open", target).Start() }
+var randRead = rand.Read
 
 func main() {
 	osExit(runMain(os.Args[1:]))
@@ -104,7 +113,7 @@ func ExecuteWithEnv(args []string, env TestEnv) (string, string, int) {
 	case "user":
 		return handleUser(args[1:], env)
 	case "auth":
-		return handleAuth(args[1:])
+		return handleAuth(args[1:], env)
 	case "feedback":
 		return handleFeedback(args[1:], env)
 	default:
@@ -190,7 +199,7 @@ func handleUser(args []string, env TestEnv) (string, string, int) {
 	return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "user requires get or body get", Example: "whoop-pp-cli user get --json"}), 2
 }
 
-func handleAuth(args []string) (string, string, int) {
+func handleAuth(args []string, env TestEnv) (string, string, int) {
 	if len(args) == 0 {
 		return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "auth requires subcommand", Example: "whoop-pp-cli auth status --json"}), 2
 	}
@@ -203,10 +212,180 @@ func handleAuth(args []string) (string, string, int) {
 	if args[0] == "status" {
 		return mustJSON(map[string]any{"authenticated": false, "hint": "Run whoop-pp-cli auth login"}), "", 0
 	}
-	if args[0] == "login" || args[0] == "refresh" || args[0] == "logout" {
+	if args[0] == "login" {
+		return handleAuthLogin(args[1:], env)
+	}
+	if args[0] == "refresh" || args[0] == "logout" {
 		return mustJSON(map[string]any{"command": "auth." + args[0], "stub": true}), "", 0
 	}
 	return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "unknown auth subcommand", Example: "whoop-pp-cli auth status --json"}), 2
+}
+
+type OAuthToken struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token,omitempty"`
+	ExpiresIn    int    `json:"expires_in,omitempty"`
+	TokenType    string `json:"token_type,omitempty"`
+	Scope        string `json:"scope,omitempty"`
+	ObtainedAt   string `json:"obtained_at"`
+}
+
+func handleAuthLogin(args []string, env TestEnv) (string, string, int) {
+	clientID := firstNonEmpty(flagValue(args, "--client-id"), os.Getenv("WHOOP_CLIENT_ID"))
+	clientSecret := firstNonEmpty(flagValue(args, "--client-secret"), os.Getenv("WHOOP_CLIENT_SECRET"))
+	redirectURI := firstNonEmpty(flagValue(args, "--redirect-uri"), "http://localhost:8787/callback")
+	scopes := firstNonEmpty(flagValue(args, "--scopes"), "read:profile read:body_measurement read:cycles read:recovery read:sleep read:workout offline")
+	state := firstNonEmpty(flagValue(args, "--state"), randomState())
+	authURL := firstNonEmpty(flagValue(args, "--auth-url"), "https://api.prod.whoop.com/oauth/oauth2/auth")
+	tokenURL := firstNonEmpty(flagValue(args, "--token-url"), "https://api.prod.whoop.com/oauth/oauth2/token")
+	if clientID == "" || clientSecret == "" {
+		return "", errorJSON(CLIError{Code: "missing_oauth_credentials", Message: "auth login requires --client-id and --client-secret or WHOOP_CLIENT_ID/WHOOP_CLIENT_SECRET", Example: "whoop-pp-cli auth login --client-id <id> --client-secret <secret> --json"}), 3
+	}
+	if len(state) != 8 {
+		return "", errorJSON(CLIError{Code: "invalid_flag_value", Message: "--state must be exactly 8 characters", Flag: "--state", Got: state, Example: "whoop-pp-cli auth login --state abcdefgh --json"}), 2
+	}
+	authorize := buildAuthorizeURL(authURL, clientID, redirectURI, scopes, state)
+	if hasFlag(args, "--print-url") {
+		return mustJSON(map[string]any{"authorization_url": authorize, "redirect_uri": redirectURI, "state": state}), "", 0
+	}
+	code := flagValue(args, "--code")
+	if code == "" {
+		if !hasFlag(args, "--no-browser") {
+			_ = openBrowser(authorize)
+		}
+		var err error
+		code, err = waitForOAuthCode(redirectURI, state)
+		if err != nil {
+			return "", errorJSON(CLIError{Code: "oauth_callback_error", Message: err.Error(), Example: "Use --print-url, open it, then retry with --code <code> if callback capture fails"}), 1
+		}
+	}
+	tok, stderr, exit := exchangeOAuthCode(tokenURL, clientID, clientSecret, redirectURI, code)
+	if exit != 0 {
+		return "", stderr, exit
+	}
+	path, err := saveToken(env, tok)
+	if err != nil {
+		return "", errorJSON(CLIError{Code: "io_error", Message: err.Error()}), 1
+	}
+	return mustJSON(map[string]any{"token_saved": true, "path": path, "expires_in": tok.ExpiresIn, "scope": tok.Scope}), "", 0
+}
+
+func buildAuthorizeURL(base, clientID, redirectURI, scopes, state string) string {
+	u, _ := url.Parse(base)
+	q := u.Query()
+	q.Set("response_type", "code")
+	q.Set("client_id", clientID)
+	q.Set("redirect_uri", redirectURI)
+	q.Set("scope", scopes)
+	q.Set("state", state)
+	u.RawQuery = q.Encode()
+	return u.String()
+}
+
+func waitForOAuthCode(redirectURI, expectedState string) (string, error) {
+	u, err := url.Parse(redirectURI)
+	if err != nil {
+		return "", err
+	}
+	path := u.Path
+	if path == "" {
+		path = "/"
+	}
+	ln, err := net.Listen("tcp", u.Host)
+	if err != nil {
+		return "", err
+	}
+	defer ln.Close()
+	codeCh := make(chan string, 1)
+	errCh := make(chan error, 1)
+	server := &http.Server{}
+	mux := http.NewServeMux()
+	mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("state") != expectedState {
+			errCh <- fmt.Errorf("OAuth state mismatch")
+			http.Error(w, "state mismatch", http.StatusBadRequest)
+			return
+		}
+		code := r.URL.Query().Get("code")
+		if code == "" {
+			errCh <- fmt.Errorf("OAuth callback missing code")
+			http.Error(w, "missing code", http.StatusBadRequest)
+			return
+		}
+		fmt.Fprint(w, "WHOOP authorization complete. You can close this tab.")
+		codeCh <- code
+	})
+	server.Handler = mux
+	go func() { _ = server.Serve(ln) }()
+	select {
+	case code := <-codeCh:
+		_ = server.Shutdown(context.Background())
+		return code, nil
+	case err := <-errCh:
+		_ = server.Shutdown(context.Background())
+		return "", err
+	case <-time.After(oauthCallbackTimeout):
+		_ = server.Shutdown(context.Background())
+		return "", fmt.Errorf("timed out waiting for OAuth callback at %s", redirectURI)
+	}
+}
+
+func exchangeOAuthCode(tokenURL, clientID, clientSecret, redirectURI, code string) (OAuthToken, string, int) {
+	form := url.Values{}
+	form.Set("grant_type", "authorization_code")
+	form.Set("code", code)
+	form.Set("client_id", clientID)
+	form.Set("client_secret", clientSecret)
+	form.Set("redirect_uri", redirectURI)
+	resp, err := http.PostForm(tokenURL, form)
+	if err != nil {
+		return OAuthToken{}, errorJSON(CLIError{Code: "network_error", Message: err.Error()}), 7
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return OAuthToken{}, errorJSON(CLIError{Code: "io_error", Message: err.Error()}), 1
+	}
+	if resp.StatusCode >= 400 {
+		return OAuthToken{}, errorJSON(CLIError{Code: "oauth_token_error", Message: string(body), Got: resp.StatusCode}), 4
+	}
+	var tok OAuthToken
+	if err := json.Unmarshal(body, &tok); err != nil || tok.AccessToken == "" {
+		return OAuthToken{}, errorJSON(CLIError{Code: "invalid_json", Message: "WHOOP token endpoint returned invalid token JSON"}), 5
+	}
+	tok.ObtainedAt = time.Now().UTC().Format(time.RFC3339)
+	return tok, "", 0
+}
+
+func saveToken(env TestEnv, tok OAuthToken) (string, error) {
+	dir := env.ConfigDir
+	if dir == "" {
+		home, _ := os.UserHomeDir()
+		dir = filepath.Join(home, ".config", "whoop-pp-cli")
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, "token.json")
+	b, _ := json.MarshalIndent(tok, "", "  ")
+	return path, os.WriteFile(path, b, 0o600)
+}
+
+func randomState() string {
+	b := make([]byte, 4)
+	if _, err := randRead(b); err != nil {
+		return "abcdefgh"
+	}
+	return hex.EncodeToString(b)
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func handleFeedback(args []string, env TestEnv) (string, string, int) {
