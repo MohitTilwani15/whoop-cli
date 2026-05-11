@@ -88,3 +88,19 @@ commands:
     endpoint: DELETE /v2/user/access
     auth: user_oauth
     destructive: true
+  auth.login:
+    endpoint: POST https://api.prod.whoop.com/oauth/oauth2/token
+    auth: oauth_client_credentials
+    local_token_store: true
+  auth.refresh:
+    endpoint: POST https://api.prod.whoop.com/oauth/oauth2/token
+    auth: oauth_client_credentials
+    local_token_store: true
+  auth.status:
+    local_token_store: read
+  auth.logout:
+    local_token_store: delete
+  feedback.create:
+    local_jsonl: append
+  feedback.list:
+    local_jsonl: read

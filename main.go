@@ -24,6 +24,9 @@ type TestEnv struct {
 	ConfigDir   string
 	APIBase     string
 	AccessToken string
+	Timeout     time.Duration
+	Retries     int
+	HTTPClient  *http.Client
 }
 
 type CLIError struct {
@@ -33,6 +36,7 @@ type CLIError struct {
 	Got        any            `json:"got,omitempty"`
 	ValidRange map[string]int `json:"valid_range,omitempty"`
 	Example    string         `json:"example,omitempty"`
+	RetryAfter string         `json:"retry_after,omitempty"`
 }
 
 type ErrorEnvelope struct {
@@ -99,6 +103,12 @@ func ExecuteWithEnv(args []string, env TestEnv) (string, string, int) {
 	if len(args) == 0 || args[0] == "--help" || args[0] == "help" {
 		return helpText(), "", 0
 	}
+	var stderr string
+	var code int
+	env, stderr, code = applyRuntimeFlags(args, env)
+	if code != 0 {
+		return "", stderr, code
+	}
 	switch args[0] {
 	case "agent-context":
 		return mustJSON(buildAgentContext(env)), "", 0
@@ -126,14 +136,15 @@ func ExecuteWithEnv(args []string, env TestEnv) (string, string, int) {
 }
 
 func handleListLike(resource string, args []string, env TestEnv) (string, string, int) {
-	if len(args) == 0 || args[0] != "list" {
+	pos := positionalArgs(args)
+	if len(pos) == 0 || pos[0] != "list" {
 		return "", errorJSON(CLIError{Code: "invalid_invocation", Message: fmt.Sprintf("%s requires subcommand list", resource), Example: fmt.Sprintf("whoop-cli %s list --json", resource)}), 2
 	}
 	endpoint, ok := listEndpoint(resource)
 	if !ok {
 		return "", errorJSON(CLIError{Code: "invalid_invocation", Message: fmt.Sprintf("%s is not a list resource", resource)}), 2
 	}
-	return apiList(env, endpoint, args[1:], fmt.Sprintf("whoop-cli %s list --limit 25 --json", resource))
+	return apiList(env, endpoint, args, fmt.Sprintf("whoop-cli %s list --limit 25 --json", resource))
 }
 
 func handleWorkouts(args []string, env TestEnv) (string, string, int) {
@@ -145,7 +156,7 @@ func handleWorkouts(args []string, env TestEnv) (string, string, int) {
 		return handleListLike("workouts", args, env)
 	}
 	if pos[0] == "get" && len(pos) >= 2 {
-		return apiGET(env, "/v2/activity/workout/"+pos[1])
+		return apiGET(env, "/v2/activity/workout/"+pathSegment(pos[1]))
 	}
 	return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "workouts get requires <workout-id>", Example: "whoop-cli workouts get <workout-id> --json"}), 2
 }
@@ -159,7 +170,7 @@ func handleSleep(args []string, env TestEnv) (string, string, int) {
 		return handleListLike("sleep", args, env)
 	}
 	if pos[0] == "get" && len(pos) >= 2 {
-		return apiGET(env, "/v2/activity/sleep/"+pos[1])
+		return apiGET(env, "/v2/activity/sleep/"+pathSegment(pos[1]))
 	}
 	return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "sleep get requires <sleep-id>", Example: "whoop-cli sleep get <sleep-id> --json"}), 2
 }
@@ -173,13 +184,13 @@ func handleCycles(args []string, env TestEnv) (string, string, int) {
 		return handleListLike("cycles", args, env)
 	}
 	if pos[0] == "get" && len(pos) >= 2 {
-		return apiGET(env, "/v2/cycle/"+pos[1])
+		return apiGET(env, "/v2/cycle/"+pathSegment(pos[1]))
 	}
 	if len(pos) >= 3 && pos[0] == "sleep" && pos[1] == "get" {
-		return apiGET(env, "/v2/cycle/"+pos[2]+"/sleep")
+		return apiGET(env, "/v2/cycle/"+pathSegment(pos[2])+"/sleep")
 	}
 	if len(pos) >= 3 && pos[0] == "recovery" && pos[1] == "get" {
-		return apiGET(env, "/v2/cycle/"+pos[2]+"/recovery")
+		return apiGET(env, "/v2/cycle/"+pathSegment(pos[2])+"/recovery")
 	}
 	return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "invalid cycles invocation", Example: "whoop-cli cycles get <cycle-id> --json"}), 2
 }
@@ -187,7 +198,7 @@ func handleCycles(args []string, env TestEnv) (string, string, int) {
 func handleMapping(args []string, env TestEnv) (string, string, int) {
 	pos := positionalArgs(args)
 	if len(pos) == 2 && pos[0] == "get" {
-		return apiGET(env, "/v1/activity-mapping/"+pos[1])
+		return apiGET(env, "/v1/activity-mapping/"+pathSegment(pos[1]))
 	}
 	return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "mapping get requires <activity-v1-id>", Example: "whoop-cli mapping get <activity-v1-id> --json"}), 2
 }
@@ -211,10 +222,10 @@ func handleAuth(args []string, env TestEnv) (string, string, int) {
 		if !hasFlag(args[1:], "--force") {
 			return "", errorJSON(CLIError{Code: "force_required", Message: "auth revoke is destructive and requires --force", Example: "whoop-cli auth revoke --force --json"}), 2
 		}
-		return mustJSON(map[string]any{"revoked": true}), "", 0
+		return handleAuthRevoke(args[1:], env)
 	}
 	if args[0] == "status" {
-		return mustJSON(map[string]any{"authenticated": false, "hint": "Run whoop-cli auth login"}), "", 0
+		return handleAuthStatus(env), "", 0
 	}
 	if args[0] == "login" {
 		return handleAuthLogin(args[1:], env)
@@ -223,7 +234,7 @@ func handleAuth(args []string, env TestEnv) (string, string, int) {
 		return handleAuthRefresh(args[1:], env)
 	}
 	if args[0] == "logout" {
-		return mustJSON(map[string]any{"command": "auth.logout", "stub": true}), "", 0
+		return handleAuthLogout(env)
 	}
 	return "", errorJSON(CLIError{Code: "invalid_invocation", Message: "unknown auth subcommand", Example: "whoop-cli auth status --json"}), 2
 }
@@ -237,6 +248,47 @@ type OAuthToken struct {
 	ObtainedAt   string `json:"obtained_at"`
 }
 
+func handleAuthStatus(env TestEnv) string {
+	if env.AccessToken != "" {
+		return mustJSON(map[string]any{"authenticated": true, "source": "test_env"})
+	}
+	if os.Getenv("WHOOP_ACCESS_TOKEN") != "" {
+		return mustJSON(map[string]any{"authenticated": true, "source": "env"})
+	}
+	tok, err := loadSavedToken(env)
+	if err != nil || tok.AccessToken == "" {
+		return mustJSON(map[string]any{"authenticated": false, "hint": "Run whoop-cli auth login"})
+	}
+	out := map[string]any{"authenticated": true, "source": "saved_token", "scope": tok.Scope}
+	if expiresAt := tokenExpiresAt(tok); expiresAt != "" {
+		out["expires_at"] = expiresAt
+	}
+	return mustJSON(out)
+}
+
+func handleAuthLogout(env TestEnv) (string, string, int) {
+	deleted, err := deleteSavedToken(env)
+	if err != nil {
+		return "", errorJSON(CLIError{Code: "io_error", Message: err.Error()}), 1
+	}
+	return mustJSON(map[string]any{"authenticated": false, "token_deleted": deleted}), "", 0
+}
+
+func handleAuthRevoke(args []string, env TestEnv) (string, string, int) {
+	if hasFlag(args, "--dry-run") {
+		return mustJSON(map[string]any{"revoked": false, "dry_run": true, "endpoint": "DELETE /v2/user/access"}), "", 0
+	}
+	_, status, stderr, code := apiRequestMethod(env, http.MethodDelete, "/v2/user/access", nil)
+	if code != 0 {
+		return "", stderr, code
+	}
+	deleted, err := deleteSavedToken(env)
+	if err != nil {
+		return "", errorJSON(CLIError{Code: "io_error", Message: err.Error()}), 1
+	}
+	return mustJSON(map[string]any{"revoked": true, "status": status, "token_deleted": deleted}), "", 0
+}
+
 func handleAuthLogin(args []string, env TestEnv) (string, string, int) {
 	clientID := firstNonEmpty(flagValue(args, "--client-id"), os.Getenv("WHOOP_CLIENT_ID"))
 	clientSecret := firstNonEmpty(flagValue(args, "--client-secret"), os.Getenv("WHOOP_CLIENT_SECRET"))
@@ -245,8 +297,8 @@ func handleAuthLogin(args []string, env TestEnv) (string, string, int) {
 	state := firstNonEmpty(flagValue(args, "--state"), randomState())
 	authURL := firstNonEmpty(flagValue(args, "--auth-url"), "https://api.prod.whoop.com/oauth/oauth2/auth")
 	tokenURL := firstNonEmpty(flagValue(args, "--token-url"), "https://api.prod.whoop.com/oauth/oauth2/token")
-	if clientID == "" || clientSecret == "" {
-		return "", errorJSON(CLIError{Code: "missing_oauth_credentials", Message: "auth login requires --client-id and --client-secret or WHOOP_CLIENT_ID/WHOOP_CLIENT_SECRET", Example: "whoop-cli auth login --client-id <id> --client-secret <secret> --json"}), 3
+	if clientID == "" {
+		return "", errorJSON(CLIError{Code: "missing_oauth_credentials", Message: "auth login requires --client-id or WHOOP_CLIENT_ID", Example: "whoop-cli auth login --client-id <id> --print-url --json"}), 3
 	}
 	if len(state) != 8 {
 		return "", errorJSON(CLIError{Code: "invalid_flag_value", Message: "--state must be exactly 8 characters", Flag: "--state", Got: state, Example: "whoop-cli auth login --state abcdefgh --json"}), 2
@@ -254,6 +306,9 @@ func handleAuthLogin(args []string, env TestEnv) (string, string, int) {
 	authorize := buildAuthorizeURL(authURL, clientID, redirectURI, scopes, state)
 	if hasFlag(args, "--print-url") {
 		return mustJSON(map[string]any{"authorization_url": authorize, "redirect_uri": redirectURI, "state": state}), "", 0
+	}
+	if clientSecret == "" {
+		return "", errorJSON(CLIError{Code: "missing_oauth_credentials", Message: "auth login code exchange requires --client-secret or WHOOP_CLIENT_SECRET", Example: "whoop-cli auth login --client-id <id> --client-secret <secret> --code <code> --json"}), 3
 	}
 	code := flagValue(args, "--code")
 	if code == "" {
@@ -266,7 +321,7 @@ func handleAuthLogin(args []string, env TestEnv) (string, string, int) {
 			return "", errorJSON(CLIError{Code: "oauth_callback_error", Message: err.Error(), Example: "Use --print-url, open it, then retry with --code <code> if callback capture fails"}), 1
 		}
 	}
-	tok, stderr, exit := exchangeOAuthCode(tokenURL, clientID, clientSecret, redirectURI, code)
+	tok, stderr, exit := exchangeOAuthCodeWithEnv(env, tokenURL, clientID, clientSecret, redirectURI, code)
 	if exit != 0 {
 		return "", stderr, exit
 	}
@@ -338,13 +393,17 @@ func waitForOAuthCode(redirectURI, expectedState string) (string, error) {
 }
 
 func exchangeOAuthCode(tokenURL, clientID, clientSecret, redirectURI, code string) (OAuthToken, string, int) {
+	return exchangeOAuthCodeWithEnv(TestEnv{}, tokenURL, clientID, clientSecret, redirectURI, code)
+}
+
+func exchangeOAuthCodeWithEnv(env TestEnv, tokenURL, clientID, clientSecret, redirectURI, code string) (OAuthToken, string, int) {
 	form := url.Values{}
 	form.Set("grant_type", "authorization_code")
 	form.Set("code", code)
 	form.Set("client_id", clientID)
 	form.Set("client_secret", clientSecret)
 	form.Set("redirect_uri", redirectURI)
-	return exchangeTokenForm(tokenURL, form)
+	return exchangeTokenFormWithEnv(env, tokenURL, form)
 }
 
 func handleAuthRefresh(args []string, env TestEnv) (string, string, int) {
@@ -358,7 +417,7 @@ func handleAuthRefresh(args []string, env TestEnv) (string, string, int) {
 	if err != nil || oldTok.RefreshToken == "" {
 		return "", errorJSON(CLIError{Code: "refresh_token_missing", Message: "WHOOP refresh token is missing; run whoop-cli auth login with offline scope", Example: "whoop-cli auth login --scopes \"read:profile read:body_measurement read:cycles read:recovery read:sleep read:workout offline\" --json"}), 3
 	}
-	newTok, stderr, exit := exchangeRefreshToken(tokenURL, clientID, clientSecret, oldTok.RefreshToken)
+	newTok, stderr, exit := exchangeRefreshTokenWithEnv(env, tokenURL, clientID, clientSecret, oldTok.RefreshToken)
 	if exit != 0 {
 		return "", stderr, exit
 	}
@@ -370,16 +429,25 @@ func handleAuthRefresh(args []string, env TestEnv) (string, string, int) {
 }
 
 func exchangeRefreshToken(tokenURL, clientID, clientSecret, refreshToken string) (OAuthToken, string, int) {
+	return exchangeRefreshTokenWithEnv(TestEnv{}, tokenURL, clientID, clientSecret, refreshToken)
+}
+
+func exchangeRefreshTokenWithEnv(env TestEnv, tokenURL, clientID, clientSecret, refreshToken string) (OAuthToken, string, int) {
 	form := url.Values{}
 	form.Set("grant_type", "refresh_token")
 	form.Set("refresh_token", refreshToken)
 	form.Set("client_id", clientID)
 	form.Set("client_secret", clientSecret)
-	return exchangeTokenForm(tokenURL, form)
+	form.Set("scope", "offline")
+	return exchangeTokenFormWithEnv(env, tokenURL, form)
 }
 
 func exchangeTokenForm(tokenURL string, form url.Values) (OAuthToken, string, int) {
-	resp, err := http.PostForm(tokenURL, form)
+	return exchangeTokenFormWithEnv(TestEnv{}, tokenURL, form)
+}
+
+func exchangeTokenFormWithEnv(env TestEnv, tokenURL string, form url.Values) (OAuthToken, string, int) {
+	resp, err := httpClient(env).PostForm(tokenURL, form)
 	if err != nil {
 		return OAuthToken{}, errorJSON(CLIError{Code: "network_error", Message: err.Error()}), 7
 	}
@@ -430,12 +498,34 @@ func loadSavedToken(env TestEnv) (OAuthToken, error) {
 	return tok, nil
 }
 
+func deleteSavedToken(env TestEnv) (bool, error) {
+	path := filepath.Join(tokenConfigDir(env), "token.json")
+	if err := os.Remove(path); err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
 func tokenConfigDir(env TestEnv) string {
 	if env.ConfigDir != "" {
 		return env.ConfigDir
 	}
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".config", "whoop-cli")
+}
+
+func tokenExpiresAt(tok OAuthToken) string {
+	if tok.ObtainedAt == "" || tok.ExpiresIn <= 0 {
+		return ""
+	}
+	obtained, err := time.Parse(time.RFC3339, tok.ObtainedAt)
+	if err != nil {
+		return ""
+	}
+	return obtained.Add(time.Duration(tok.ExpiresIn) * time.Second).UTC().Format(time.RFC3339)
 }
 
 func randomState() string {
@@ -493,7 +583,9 @@ func handleFeedback(args []string, env TestEnv) (string, string, int) {
 				continue
 			}
 			var rec map[string]any
-			_ = json.Unmarshal([]byte(line), &rec)
+			if err := json.Unmarshal([]byte(line), &rec); err != nil {
+				return "", errorJSON(CLIError{Code: "invalid_json", Message: "feedback file contains invalid JSONL", Got: line}), 5
+			}
 			records = append(records, rec)
 		}
 		return mustJSON(map[string]any{"records": records}), "", 0
@@ -558,6 +650,10 @@ func apiList(env TestEnv, path string, args []string, example string) (string, s
 }
 
 func apiRequest(env TestEnv, path string, params map[string]string) ([]byte, int, string, int) {
+	return apiRequestMethod(env, http.MethodGet, path, params)
+}
+
+func apiRequestMethod(env TestEnv, method, path string, params map[string]string) ([]byte, int, string, int) {
 	base := env.APIBase
 	if base == "" {
 		base = os.Getenv("WHOOP_API_BASE")
@@ -575,42 +671,174 @@ func apiRequest(env TestEnv, path string, params map[string]string) ([]byte, int
 	if token == "" {
 		return nil, 0, errorJSON(CLIError{Code: "auth_missing", Message: "WHOOP access token is missing", Example: "Set WHOOP_ACCESS_TOKEN or run whoop-cli auth login --json"}), 3
 	}
-	url := strings.TrimRight(base, "/") + path
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		return nil, 0, errorJSON(CLIError{Code: "invalid_request", Message: err.Error()}), 2
-	}
-	q := req.URL.Query()
-	for k, v := range params {
-		if v != "" {
-			q.Set(k, v)
+	reqURL := strings.TrimRight(base, "/") + path
+	client := httpClient(env)
+	retries := env.Retries
+	for attempt := 0; ; attempt++ {
+		req, err := http.NewRequest(method, reqURL, nil)
+		if err != nil {
+			return nil, 0, errorJSON(CLIError{Code: "invalid_request", Message: err.Error()}), 2
 		}
-	}
-	req.URL.RawQuery = q.Encode()
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "whoop-cli/"+version)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, 0, errorJSON(CLIError{Code: "network_error", Message: err.Error()}), 7
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, resp.StatusCode, errorJSON(CLIError{Code: "io_error", Message: err.Error()}), 1
-	}
-	if resp.StatusCode >= 400 {
-		code := 4
-		if resp.StatusCode == http.StatusUnauthorized {
-			code = 3
-		} else if resp.StatusCode == http.StatusTooManyRequests {
-			code = 6
-		} else if resp.StatusCode >= 500 {
-			code = 5
+		q := req.URL.Query()
+		for k, v := range params {
+			if v != "" {
+				q.Set(k, v)
+			}
 		}
-		return nil, resp.StatusCode, errorJSON(CLIError{Code: "whoop_api_error", Message: string(body), Got: resp.StatusCode}), code
+		req.URL.RawQuery = q.Encode()
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("User-Agent", "whoop-cli/"+version)
+		resp, err := client.Do(req)
+		if err != nil {
+			if attempt < retries {
+				continue
+			}
+			return nil, 0, errorJSON(CLIError{Code: "network_error", Message: err.Error()}), 7
+		}
+		body, readErr := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if readErr != nil {
+			return nil, resp.StatusCode, errorJSON(CLIError{Code: "io_error", Message: readErr.Error()}), 1
+		}
+		if shouldRetryStatus(resp.StatusCode) && attempt < retries {
+			sleepBeforeRetry(resp.Header)
+			continue
+		}
+		if resp.StatusCode >= 400 {
+			return nil, resp.StatusCode, apiStatusError(resp.StatusCode, body, resp.Header), statusExitCode(resp.StatusCode)
+		}
+		return body, resp.StatusCode, "", 0
 	}
-	return body, resp.StatusCode, "", 0
+}
+
+func httpClient(env TestEnv) *http.Client {
+	if env.HTTPClient != nil {
+		return env.HTTPClient
+	}
+	timeout := env.Timeout
+	if timeout == 0 {
+		timeout = 30 * time.Second
+	}
+	client := *http.DefaultClient
+	if client.Timeout == 0 {
+		client.Timeout = timeout
+	}
+	return &client
+}
+
+func shouldRetryStatus(status int) bool {
+	return status == http.StatusTooManyRequests || status >= 500
+}
+
+func statusExitCode(status int) int {
+	if status == http.StatusUnauthorized {
+		return 3
+	}
+	if status == http.StatusTooManyRequests {
+		return 6
+	}
+	if status >= 500 {
+		return 5
+	}
+	return 4
+}
+
+func apiStatusError(status int, body []byte, header http.Header) string {
+	err := CLIError{Code: "whoop_api_error", Message: string(body), Got: status}
+	if status == http.StatusTooManyRequests {
+		err.RetryAfter = firstNonEmpty(header.Get("Retry-After"), header.Get("X-RateLimit-Reset"))
+	}
+	return errorJSON(err)
+}
+
+func sleepBeforeRetry(header http.Header) {
+	delay := retryDelay(header)
+	if delay > 0 {
+		time.Sleep(delay)
+	}
+}
+
+func retryDelay(header http.Header) time.Duration {
+	raw := firstNonEmpty(header.Get("Retry-After"), header.Get("X-RateLimit-Reset"))
+	if raw == "" {
+		return 0
+	}
+	seconds, err := strconv.Atoi(raw)
+	if err != nil || seconds <= 0 {
+		return 0
+	}
+	if seconds > 5 {
+		seconds = 5
+	}
+	return time.Duration(seconds) * time.Second
+}
+
+func applyRuntimeFlags(args []string, env TestEnv) (TestEnv, string, int) {
+	if value, found, ok := optionalFlagValue(args, "--api-base"); found {
+		if !ok {
+			return env, errorJSON(CLIError{Code: "missing_flag_value", Message: "--api-base requires a value", Flag: "--api-base", Example: "whoop-cli user get --api-base http://localhost:8080 --json"}), 2
+		}
+		env.APIBase = value
+	}
+	if value, found, ok := optionalFlagValue(args, "--config"); found {
+		if !ok {
+			return env, errorJSON(CLIError{Code: "missing_flag_value", Message: "--config requires a value", Flag: "--config", Example: "whoop-cli auth status --config ~/.config/whoop-cli --json"}), 2
+		}
+		env.ConfigDir = value
+	}
+	if value, found, ok := optionalFlagValue(args, "--timeout"); found {
+		if !ok {
+			return env, errorJSON(CLIError{Code: "missing_flag_value", Message: "--timeout requires a value", Flag: "--timeout", Example: "whoop-cli user get --timeout 30s --json"}), 2
+		}
+		timeout, err := parseTimeout(value)
+		if err != nil {
+			return env, errorJSON(CLIError{Code: "invalid_flag_value", Message: "--timeout must be a positive duration such as 30s or a positive number of seconds", Flag: "--timeout", Got: value, Example: "whoop-cli user get --timeout 30s --json"}), 2
+		}
+		env.Timeout = timeout
+	}
+	if value, found, ok := optionalFlagValue(args, "--retries"); found {
+		if !ok {
+			return env, errorJSON(CLIError{Code: "missing_flag_value", Message: "--retries requires a value", Flag: "--retries", Example: "whoop-cli user get --retries 2 --json"}), 2
+		}
+		retries, err := strconv.Atoi(value)
+		if err != nil || retries < 0 || retries > 5 {
+			return env, errorJSON(CLIError{Code: "invalid_flag_value", Message: "--retries must be between 0 and 5", Flag: "--retries", Got: value, ValidRange: map[string]int{"min": 0, "max": 5}, Example: "whoop-cli user get --retries 2 --json"}), 2
+		}
+		env.Retries = retries
+	}
+	return env, "", 0
+}
+
+func optionalFlagValue(args []string, flag string) (string, bool, bool) {
+	for i := 0; i < len(args); i++ {
+		if args[i] != flag {
+			continue
+		}
+		if i+1 >= len(args) || strings.HasPrefix(args[i+1], "--") {
+			return "", true, false
+		}
+		return args[i+1], true, true
+	}
+	return "", false, false
+}
+
+func parseTimeout(value string) (time.Duration, error) {
+	if seconds, err := strconv.Atoi(value); err == nil {
+		if seconds <= 0 {
+			return 0, fmt.Errorf("timeout must be positive")
+		}
+		return time.Duration(seconds) * time.Second, nil
+	}
+	d, err := time.ParseDuration(value)
+	if err != nil || d <= 0 {
+		return 0, fmt.Errorf("timeout must be positive")
+	}
+	return d, nil
+}
+
+func pathSegment(value string) string {
+	return url.PathEscape(value)
 }
 
 func listEndpoint(resource string) (string, bool) {
@@ -672,8 +900,14 @@ func buildAgentContext(env TestEnv) AgentContext {
 		"cycles.sleep.get":    {Usage: "whoop-cli cycles sleep get <cycle-id> --json", RequiresAuth: "user_oauth", RequiredScopes: []string{"read:sleep"}, Flags: dataFlags()},
 		"cycles.recovery.get": {Usage: "whoop-cli cycles recovery get <cycle-id> --json", RequiresAuth: "user_oauth", RequiredScopes: []string{"read:recovery"}, Flags: dataFlags()},
 		"recovery.list":       {Usage: "whoop-cli recovery list [flags]", RequiresAuth: "user_oauth", RequiredScopes: []string{"read:recovery"}, Flags: listFlags()},
-		"auth.revoke":         {Usage: "whoop-cli auth revoke --force --json", RequiresAuth: "user_oauth", Destructive: true, Flags: map[string]any{"--json": map[string]any{"type": "bool"}, "--force": map[string]any{"type": "bool", "required": true}, "--dry-run": map[string]any{"type": "bool"}}},
+		"mapping.get":         {Usage: "whoop-cli mapping get <activity-v1-id> --json", RequiresAuth: "user_oauth", Flags: dataFlags()},
+		"auth.login":          {Usage: "whoop-cli auth login --client-id <id> --client-secret <secret> --json", Flags: authLoginFlags()},
+		"auth.status":         {Usage: "whoop-cli auth status --json", Flags: dataFlags()},
+		"auth.refresh":        {Usage: "whoop-cli auth refresh --client-id <id> --client-secret <secret> --json", Flags: authRefreshFlags()},
+		"auth.logout":         {Usage: "whoop-cli auth logout --json", Flags: dataFlags()},
+		"auth.revoke":         {Usage: "whoop-cli auth revoke --force --json", RequiresAuth: "user_oauth", Destructive: true, Flags: destructiveFlags()},
 		"feedback.create":     {Usage: "whoop-cli feedback create <text> --json", Flags: dataFlags()},
+		"feedback.list":       {Usage: "whoop-cli feedback list --json", Flags: dataFlags()},
 	}
 	return AgentContext{
 		SchemaVersion:     "1",
@@ -688,7 +922,7 @@ func buildAgentContext(env TestEnv) AgentContext {
 }
 
 func dataFlags() map[string]any {
-	return map[string]any{"--json": map[string]any{"type": "bool"}, "--profile": map[string]any{"type": "string"}}
+	return map[string]any{"--json": map[string]any{"type": "bool"}, "--profile": map[string]any{"type": "string"}, "--api-base": map[string]any{"type": "string"}, "--config": map[string]any{"type": "string"}, "--timeout": map[string]any{"type": "duration"}, "--retries": map[string]any{"type": "int", "min": 0, "max": 5, "default": 0}}
 }
 func listFlags() map[string]any {
 	f := dataFlags()
@@ -697,6 +931,33 @@ func listFlags() map[string]any {
 	f["--end"] = map[string]any{"type": "string", "format": "date-time"}
 	f["--cursor"] = map[string]any{"type": "string"}
 	f["--all"] = map[string]any{"type": "bool"}
+	return f
+}
+func destructiveFlags() map[string]any {
+	f := dataFlags()
+	f["--force"] = map[string]any{"type": "bool", "required": true}
+	f["--dry-run"] = map[string]any{"type": "bool"}
+	return f
+}
+func authLoginFlags() map[string]any {
+	f := dataFlags()
+	f["--client-id"] = map[string]any{"type": "string"}
+	f["--client-secret"] = map[string]any{"type": "string", "secret": true}
+	f["--redirect-uri"] = map[string]any{"type": "string"}
+	f["--scopes"] = map[string]any{"type": "string"}
+	f["--state"] = map[string]any{"type": "string", "length": 8}
+	f["--auth-url"] = map[string]any{"type": "string"}
+	f["--token-url"] = map[string]any{"type": "string"}
+	f["--print-url"] = map[string]any{"type": "bool"}
+	f["--code"] = map[string]any{"type": "string"}
+	f["--no-browser"] = map[string]any{"type": "bool"}
+	return f
+}
+func authRefreshFlags() map[string]any {
+	f := dataFlags()
+	f["--client-id"] = map[string]any{"type": "string"}
+	f["--client-secret"] = map[string]any{"type": "string", "secret": true}
+	f["--token-url"] = map[string]any{"type": "string"}
 	return f
 }
 

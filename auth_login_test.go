@@ -12,7 +12,7 @@ import (
 )
 
 func TestAuthLoginPrintURLBuildsWhoopAuthorizeURL(t *testing.T) {
-	stdout, stderr, code := ExecuteWithEnv([]string{"auth", "login", "--client-id", "cid", "--client-secret", "secret", "--redirect-uri", "http://localhost:8787/callback", "--scopes", "read:profile read:sleep", "--state", "abcdefgh", "--print-url", "--json"}, TestEnv{})
+	stdout, stderr, code := ExecuteWithEnv([]string{"auth", "login", "--client-id", "cid", "--redirect-uri", "http://localhost:8787/callback", "--scopes", "read:profile read:sleep", "--state", "abcdefgh", "--print-url", "--json"}, TestEnv{})
 	if code != 0 || stderr != "" {
 		t.Fatalf("expected success code=%d stderr=%s", code, stderr)
 	}
@@ -31,6 +31,20 @@ func TestAuthLoginPrintURLBuildsWhoopAuthorizeURL(t *testing.T) {
 	q := u.Query()
 	if q.Get("client_id") != "cid" || q.Get("redirect_uri") != "http://localhost:8787/callback" || q.Get("scope") != "read:profile read:sleep" || q.Get("state") != "abcdefgh" || q.Get("response_type") != "code" {
 		t.Fatalf("bad query: %s", u.RawQuery)
+	}
+}
+
+func TestAuthLoginPrintURLDoesNotRequireClientSecret(t *testing.T) {
+	stdout, stderr, code := ExecuteWithEnv([]string{"auth", "login", "--client-id", "cid", "--state", "abcdefgh", "--print-url", "--json"}, TestEnv{})
+	if code != 0 || stderr != "" || !strings.Contains(stdout, "authorization_url") {
+		t.Fatalf("expected print-url success without secret, code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+}
+
+func TestAuthLoginCodeExchangeRequiresClientSecret(t *testing.T) {
+	_, stderr, code := ExecuteWithEnv([]string{"auth", "login", "--client-id", "cid", "--code", "cb-code", "--json"}, TestEnv{ConfigDir: t.TempDir()})
+	if code != 3 || !strings.Contains(stderr, "code exchange requires --client-secret") {
+		t.Fatalf("expected missing exchange secret error, code=%d stderr=%s", code, stderr)
 	}
 }
 

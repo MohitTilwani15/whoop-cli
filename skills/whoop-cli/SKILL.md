@@ -40,10 +40,23 @@ WHOOP_ACCESS_TOKEN=... whoop-cli user get --json
 WHOOP_ACCESS_TOKEN=... whoop-cli user body get --json
 ```
 
+### Auth status and refresh
+
+```bash
+whoop-cli auth status --json
+whoop-cli auth refresh --client-id "$WHOOP_CLIENT_ID" --client-secret "$WHOOP_CLIENT_SECRET" --json
+```
+
 ### Workouts
 
 ```bash
 WHOOP_ACCESS_TOKEN=... whoop-cli workouts list --start 2026-05-01T00:00:00Z --end 2026-05-08T00:00:00Z --json
+```
+
+### Revoke access
+
+```bash
+whoop-cli auth revoke --force --json
 ```
 
 ## Feedback
