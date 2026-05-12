@@ -56,6 +56,71 @@ whoop-cli update --check --json
 whoop-cli update --json
 ```
 
+## Create a WHOOP Developer App
+
+Before `whoop-cli` can access WHOOP data, create an app in the [WHOOP Developer Dashboard](https://developer-dashboard.whoop.com/). WHOOP's docs describe this as the place to create apps, manage client credentials, configure scopes, and register redirect URIs.
+
+1. Sign in at [developer.whoop.com](https://developer.whoop.com/) and open **Dashboard**.
+2. Create a team if prompted.
+3. Create an app.
+4. Select the scopes this CLI should request. For full current CLI coverage, use:
+   ```text
+   read:profile read:body_measurement read:cycles read:recovery read:sleep read:workout offline
+   ```
+   Request fewer scopes if you only need a subset of commands.
+5. Add this redirect URI to the app:
+   ```text
+   http://localhost:8787/callback
+   ```
+   The redirect URI in the OAuth request must exactly match one registered in the dashboard.
+6. Copy the app's **Client ID** and **Client Secret**. Keep the secret private; do not commit it, log it, or put it in frontend/mobile code.
+
+Set credentials in your shell:
+
+```bash
+export WHOOP_CLIENT_ID="your-client-id"
+export WHOOP_CLIENT_SECRET="your-client-secret"
+```
+
+Start OAuth login:
+
+```bash
+whoop-cli auth login \
+  --client-id "$WHOOP_CLIENT_ID" \
+  --client-secret "$WHOOP_CLIENT_SECRET" \
+  --redirect-uri http://localhost:8787/callback \
+  --json
+```
+
+If the browser callback cannot be captured automatically, generate a URL manually:
+
+```bash
+whoop-cli auth login \
+  --client-id "$WHOOP_CLIENT_ID" \
+  --redirect-uri http://localhost:8787/callback \
+  --print-url \
+  --json
+```
+
+Open the URL, sign in, then copy the redirected `localhost` URL. Exchange the `code` from that URL:
+
+```bash
+whoop-cli auth login \
+  --client-id "$WHOOP_CLIENT_ID" \
+  --client-secret "$WHOOP_CLIENT_SECRET" \
+  --redirect-uri http://localhost:8787/callback \
+  --code "<code-from-callback-url>" \
+  --json
+```
+
+Verify and make a small request:
+
+```bash
+whoop-cli auth status --json
+whoop-cli user get --json
+whoop-cli workouts list --limit 1 --json
+```
+
 ## Release
 
 Create and push a version tag to publish release binaries:

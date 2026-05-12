@@ -12,6 +12,44 @@ The CLI looks for an access token in this order:
 
 Do not print token values. Do not commit token files.
 
+## Developer App Setup
+
+WHOOP requires a Developer Dashboard app before OAuth can work:
+
+1. Go to `https://developer.whoop.com/`.
+2. Open the Developer Dashboard.
+3. Create a team if prompted.
+4. Create an app.
+5. Configure scopes. For all current `whoop-cli` data commands:
+   ```text
+   read:profile read:body_measurement read:cycles read:recovery read:sleep read:workout offline
+   ```
+6. Register the redirect URI used by the CLI:
+   ```text
+   http://localhost:8787/callback
+   ```
+7. Copy the Client ID and Client Secret from the app.
+
+The redirect URI in the CLI command must exactly match a redirect URI registered in the app. The Client Secret is sensitive and should be used only in a trusted shell/server-side context.
+
+Credentials can be passed explicitly:
+
+```bash
+whoop-cli auth login \
+  --client-id "<client-id>" \
+  --client-secret "<client-secret>" \
+  --redirect-uri http://localhost:8787/callback \
+  --json
+```
+
+Or via environment variables:
+
+```bash
+export WHOOP_CLIENT_ID="your-client-id"
+export WHOOP_CLIENT_SECRET="your-client-secret"
+whoop-cli auth login --redirect-uri http://localhost:8787/callback --json
+```
+
 ## OAuth Browser Flow
 
 The authorization URL only needs:

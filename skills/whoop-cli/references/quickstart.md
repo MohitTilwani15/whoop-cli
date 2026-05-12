@@ -79,6 +79,43 @@ go test ./...
 go run . auth status --json
 ```
 
+## Create a WHOOP Developer App
+
+Before a user can log in through OAuth, they need a WHOOP Developer app:
+
+1. Go to `https://developer.whoop.com/`.
+2. Open the Developer Dashboard.
+3. Create a team if prompted.
+4. Create an app.
+5. Choose scopes. For full CLI coverage:
+   ```text
+   read:profile read:body_measurement read:cycles read:recovery read:sleep read:workout offline
+   ```
+6. Register the redirect URI that the CLI will use:
+   ```text
+   http://localhost:8787/callback
+   ```
+7. Copy the app's Client ID and Client Secret.
+
+The client secret is sensitive. Do not print it, commit it, or expose it in frontend/mobile code.
+
+Recommended shell setup:
+
+```bash
+export WHOOP_CLIENT_ID="your-client-id"
+export WHOOP_CLIENT_SECRET="your-client-secret"
+```
+
+Then authenticate:
+
+```bash
+whoop-cli auth login \
+  --client-id "$WHOOP_CLIENT_ID" \
+  --client-secret "$WHOOP_CLIENT_SECRET" \
+  --redirect-uri http://localhost:8787/callback \
+  --json
+```
+
 ## Important Conventions
 
 - Use `--json` for data commands.
