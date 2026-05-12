@@ -67,6 +67,17 @@ git push origin v0.1.1
 
 The release workflow builds macOS, Linux, and Windows archives, injects the tag into `whoop-cli version`, generates `checksums.txt`, and publishes a GitHub Release. The one-line installer and `whoop-cli update` both install from the latest GitHub Release.
 
+## Agent Skill
+
+The canonical skill lives in `skills/whoop-cli`. Repo-local discovery paths are symlinked to that source:
+
+```text
+.claude/skills/whoop-cli -> ../../skills/whoop-cli
+.agents/skills/whoop-cli -> ../../skills/whoop-cli
+```
+
+Edit only `skills/whoop-cli` so the skill does not drift across agent runtimes.
+
 ## Usage
 
 ```bash
