@@ -24,6 +24,7 @@ func TestAgentContextIncludesImplementedCommands(t *testing.T) {
 		"user.get", "user.body.get", "cycles.list", "cycles.get", "cycles.sleep.get", "cycles.recovery.get",
 		"recovery.list", "sleep.list", "sleep.get", "workouts.list", "workouts.get", "mapping.get",
 		"feedback.create", "feedback.list",
+		"update",
 	} {
 		if _, ok := ctx.Commands[command]; !ok {
 			t.Fatalf("agent-context missing implemented command %s", command)

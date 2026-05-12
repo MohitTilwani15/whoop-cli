@@ -1,0 +1,73 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          version="${GITHUB_REF_NAME:-dev}"
+          mkdir -p dist build
+
+          build_one() {
+            local goos="$1"
+            local goarch="$2"
+            local binary="whoop-cli"
+            local asset="whoop-cli_${version}_${goos}_${goarch}"
+
+            rm -rf "build/${asset}"
+            mkdir -p "build/${asset}"
+
+            if [ "$goos" = "windows" ]; then
+              binary="whoop-cli.exe"
+            fi
+
+            GOOS="$goos" GOARCH="$goarch" CGO_ENABLED=0 \
+              go build -trimpath -ldflags="-s -w -X main.version=${version}" \
+              -o "build/${asset}/${binary}" .
+
+            if [ "$goos" = "windows" ]; then
+              (cd "build/${asset}" && zip -q "../../dist/${asset}.zip" "$binary")
+            else
+              tar -C "build/${asset}" -czf "dist/${asset}.tar.gz" "$binary"
+            fi
+          }
+
+          build_one darwin amd64
+          build_one darwin arm64
+          build_one linux amd64
+          build_one linux arm64
+          build_one windows amd64
+
+          (cd dist && sha256sum whoop-cli_* > checksums.txt)
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "$GITHUB_REF_NAME" \
+            --notes "Release $GITHUB_REF_NAME"

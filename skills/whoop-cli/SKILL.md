@@ -59,6 +59,13 @@ WHOOP_ACCESS_TOKEN=... whoop-cli workouts list --start 2026-05-01T00:00:00Z --en
 whoop-cli auth revoke --force --json
 ```
 
+### Update CLI
+
+```bash
+whoop-cli update --check --json
+whoop-cli update --json
+```
+
 ## Feedback
 
 If the CLI is painful or an error message is unhelpful, record feedback:

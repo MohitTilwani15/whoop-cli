@@ -1,8 +1,13 @@
 package main
 
 import (
+	"archive/tar"
+	"archive/zip"
+	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -13,12 +18,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
 )
 
-const version = "0.1.0"
+var version = "dev"
 
 type TestEnv struct {
 	ConfigDir   string
@@ -65,6 +71,16 @@ type AgentContext struct {
 type PageResponse struct {
 	Records   []any  `json:"records"`
 	NextToken string `json:"next_token"`
+}
+
+type GitHubRelease struct {
+	TagName string        `json:"tag_name"`
+	Assets  []GitHubAsset `json:"assets"`
+}
+
+type GitHubAsset struct {
+	Name               string `json:"name"`
+	BrowserDownloadURL string `json:"browser_download_url"`
 }
 
 var osExit = os.Exit
@@ -114,6 +130,8 @@ func ExecuteWithEnv(args []string, env TestEnv) (string, string, int) {
 		return mustJSON(buildAgentContext(env)), "", 0
 	case "version":
 		return mustJSON(map[string]string{"version": version}), "", 0
+	case "update":
+		return handleUpdate(args[1:], env)
 	case "workouts":
 		return handleWorkouts(args[1:], env)
 	case "sleep":
@@ -774,6 +792,227 @@ func retryDelay(header http.Header) time.Duration {
 	return time.Duration(seconds) * time.Second
 }
 
+func handleUpdate(args []string, env TestEnv) (string, string, int) {
+	repo := firstNonEmpty(flagValue(args, "--repo"), "mohittilwani/whoop-cli")
+	targetVersion := firstNonEmpty(flagValue(args, "--version"), "latest")
+	releaseURL := flagValue(args, "--release-url")
+	installDir := flagValue(args, "--install-dir")
+	checkOnly := hasFlag(args, "--check")
+
+	release, stderr, code := fetchRelease(env, repo, targetVersion, releaseURL)
+	if code != 0 {
+		return "", stderr, code
+	}
+	out := map[string]any{
+		"current_version":  version,
+		"latest_version":   release.TagName,
+		"update_available": !sameVersion(version, release.TagName),
+	}
+	if checkOnly {
+		return mustJSON(out), "", 0
+	}
+	if installDir == "" {
+		exe, err := os.Executable()
+		if err != nil {
+			return "", errorJSON(CLIError{Code: "io_error", Message: err.Error()}), 1
+		}
+		installDir = filepath.Dir(exe)
+	}
+	installedPath, err := installReleaseAsset(env, release, installDir)
+	if err != nil {
+		return "", errorJSON(CLIError{Code: "update_failed", Message: err.Error()}), 1
+	}
+	out["updated"] = true
+	out["path"] = installedPath
+	return mustJSON(out), "", 0
+}
+
+func fetchRelease(env TestEnv, repo, targetVersion, releaseURL string) (GitHubRelease, string, int) {
+	if releaseURL == "" {
+		if targetVersion == "latest" {
+			releaseURL = "https://api.github.com/repos/" + repo + "/releases/latest"
+		} else {
+			releaseURL = "https://api.github.com/repos/" + repo + "/releases/tags/" + pathSegment(targetVersion)
+		}
+	}
+	body, err := downloadBytes(env, releaseURL)
+	if err != nil {
+		return GitHubRelease{}, errorJSON(CLIError{Code: "network_error", Message: err.Error()}), 7
+	}
+	var release GitHubRelease
+	if err := json.Unmarshal(body, &release); err != nil || release.TagName == "" {
+		return GitHubRelease{}, errorJSON(CLIError{Code: "invalid_json", Message: "release endpoint returned invalid JSON"}), 5
+	}
+	return release, "", 0
+}
+
+func installReleaseAsset(env TestEnv, release GitHubRelease, installDir string) (string, error) {
+	asset, ok := selectReleaseAsset(release.Assets, runtime.GOOS, runtime.GOARCH)
+	if !ok {
+		return "", fmt.Errorf("no release asset found for %s/%s", runtime.GOOS, runtime.GOARCH)
+	}
+	checksums, ok := selectChecksumsAsset(release.Assets)
+	if !ok {
+		return "", fmt.Errorf("release %s does not include checksums.txt", release.TagName)
+	}
+	archive, err := downloadBytes(env, asset.BrowserDownloadURL)
+	if err != nil {
+		return "", err
+	}
+	checksumBody, err := downloadBytes(env, checksums.BrowserDownloadURL)
+	if err != nil {
+		return "", err
+	}
+	if err := verifyAssetChecksum(asset.Name, archive, string(checksumBody)); err != nil {
+		return "", err
+	}
+	binary, err := extractBinary(asset.Name, archive, updateBinaryName(runtime.GOOS))
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(installDir, 0o755); err != nil {
+		return "", err
+	}
+	path := filepath.Join(installDir, updateBinaryName(runtime.GOOS))
+	if err := os.WriteFile(path, binary, 0o755); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+func downloadBytes(env TestEnv, target string) ([]byte, error) {
+	if strings.HasPrefix(target, "file://") {
+		return os.ReadFile(strings.TrimPrefix(target, "file://"))
+	}
+	resp, err := httpClient(env).Get(target)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("GET %s returned %d: %s", target, resp.StatusCode, string(body))
+	}
+	return body, nil
+}
+
+func selectReleaseAsset(assets []GitHubAsset, goos, goarch string) (GitHubAsset, bool) {
+	for _, asset := range assets {
+		name := strings.ToLower(asset.Name)
+		if !strings.Contains(name, strings.ToLower(goos)) || !strings.Contains(name, strings.ToLower(goarch)) {
+			continue
+		}
+		if strings.Contains(name, "checksum") || strings.Contains(name, "sha256") {
+			continue
+		}
+		if strings.HasSuffix(name, ".tar.gz") || strings.HasSuffix(name, ".tgz") || strings.HasSuffix(name, ".zip") {
+			return asset, true
+		}
+	}
+	return GitHubAsset{}, false
+}
+
+func selectChecksumsAsset(assets []GitHubAsset) (GitHubAsset, bool) {
+	for _, asset := range assets {
+		name := strings.ToLower(asset.Name)
+		if strings.HasSuffix(name, ".txt") && (strings.Contains(name, "checksum") || strings.Contains(name, "sha256")) {
+			return asset, true
+		}
+	}
+	return GitHubAsset{}, false
+}
+
+func verifyAssetChecksum(assetName string, body []byte, checksums string) error {
+	expected := ""
+	for _, line := range strings.Split(checksums, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		name := strings.TrimPrefix(fields[len(fields)-1], "*")
+		if filepath.Base(name) == assetName {
+			expected = strings.ToLower(fields[0])
+			break
+		}
+	}
+	if expected == "" {
+		return fmt.Errorf("checksums.txt does not include %s", assetName)
+	}
+	sum := sha256.Sum256(body)
+	actual := hex.EncodeToString(sum[:])
+	if actual != expected {
+		return fmt.Errorf("checksum mismatch for %s", assetName)
+	}
+	return nil
+}
+
+func extractBinary(assetName string, archive []byte, binaryName string) ([]byte, error) {
+	lower := strings.ToLower(assetName)
+	if strings.HasSuffix(lower, ".zip") {
+		return extractBinaryZip(archive, binaryName)
+	}
+	if strings.HasSuffix(lower, ".tar.gz") || strings.HasSuffix(lower, ".tgz") {
+		return extractBinaryTarGz(archive, binaryName)
+	}
+	return nil, fmt.Errorf("unsupported archive format: %s", assetName)
+}
+
+func extractBinaryTarGz(archive []byte, binaryName string) ([]byte, error) {
+	gz, err := gzip.NewReader(bytes.NewReader(archive))
+	if err != nil {
+		return nil, err
+	}
+	defer gz.Close()
+	tr := tar.NewReader(gz)
+	for {
+		h, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		if filepath.Base(h.Name) != binaryName || h.FileInfo().IsDir() {
+			continue
+		}
+		return io.ReadAll(tr)
+	}
+	return nil, fmt.Errorf("archive did not contain %s", binaryName)
+}
+
+func extractBinaryZip(archive []byte, binaryName string) ([]byte, error) {
+	zr, err := zip.NewReader(bytes.NewReader(archive), int64(len(archive)))
+	if err != nil {
+		return nil, err
+	}
+	for _, f := range zr.File {
+		if filepath.Base(f.Name) != binaryName || f.FileInfo().IsDir() {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return nil, err
+		}
+		defer rc.Close()
+		return io.ReadAll(rc)
+	}
+	return nil, fmt.Errorf("archive did not contain %s", binaryName)
+}
+
+func updateBinaryName(goos string) string {
+	if goos == "windows" {
+		return "whoop-cli.exe"
+	}
+	return "whoop-cli"
+}
+
+func sameVersion(a, b string) bool {
+	return strings.TrimPrefix(a, "v") == strings.TrimPrefix(b, "v")
+}
+
 func applyRuntimeFlags(args []string, env TestEnv) (TestEnv, string, int) {
 	if value, found, ok := optionalFlagValue(args, "--api-base"); found {
 		if !ok {
@@ -908,6 +1147,7 @@ func buildAgentContext(env TestEnv) AgentContext {
 		"auth.revoke":         {Usage: "whoop-cli auth revoke --force --json", RequiresAuth: "user_oauth", Destructive: true, Flags: destructiveFlags()},
 		"feedback.create":     {Usage: "whoop-cli feedback create <text> --json", Flags: dataFlags()},
 		"feedback.list":       {Usage: "whoop-cli feedback list --json", Flags: dataFlags()},
+		"update":              {Usage: "whoop-cli update [--check] [--version <tag>] --json", Flags: updateFlags()},
 	}
 	return AgentContext{
 		SchemaVersion:     "1",
@@ -958,6 +1198,14 @@ func authRefreshFlags() map[string]any {
 	f["--client-id"] = map[string]any{"type": "string"}
 	f["--client-secret"] = map[string]any{"type": "string", "secret": true}
 	f["--token-url"] = map[string]any{"type": "string"}
+	return f
+}
+func updateFlags() map[string]any {
+	f := dataFlags()
+	f["--check"] = map[string]any{"type": "bool"}
+	f["--version"] = map[string]any{"type": "string"}
+	f["--repo"] = map[string]any{"type": "string", "default": "mohittilwani/whoop-cli"}
+	f["--install-dir"] = map[string]any{"type": "string"}
 	return f
 }
 

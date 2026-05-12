@@ -49,6 +49,24 @@ Developer install with Go:
 go install github.com/mohittilwani/whoop-cli@latest
 ```
 
+Update an existing release install:
+
+```bash
+whoop-cli update --check --json
+whoop-cli update --json
+```
+
+## Release
+
+Create and push a version tag to publish release binaries:
+
+```bash
+git tag v0.1.1
+git push origin v0.1.1
+```
+
+The release workflow builds macOS, Linux, and Windows archives, injects the tag into `whoop-cli version`, generates `checksums.txt`, and publishes a GitHub Release. The one-line installer and `whoop-cli update` both install from the latest GitHub Release.
+
 ## Usage
 
 ```bash
