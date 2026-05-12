@@ -26,6 +26,29 @@ This repo has the first working implementation:
 - Schema file that codifies vocabulary and endpoint coverage.
 - Broad statement coverage in tests.
 
+## Install
+
+Install the latest release:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mohittilwani/whoop-cli/main/install.sh | sh
+```
+
+By default, the installer downloads the matching GitHub Release binary, verifies `checksums.txt`, and installs `whoop-cli` to `~/.local/bin`.
+
+Options:
+
+```bash
+WHOOP_CLI_VERSION=v0.1.0 curl -fsSL https://raw.githubusercontent.com/mohittilwani/whoop-cli/main/install.sh | sh
+WHOOP_CLI_INSTALL_DIR=/usr/local/bin curl -fsSL https://raw.githubusercontent.com/mohittilwani/whoop-cli/main/install.sh | sh
+```
+
+Developer install with Go:
+
+```bash
+go install github.com/mohittilwani/whoop-cli@latest
+```
+
 ## Usage
 
 ```bash
