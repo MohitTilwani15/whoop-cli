@@ -41,7 +41,7 @@ curl -fsSL https://raw.githubusercontent.com/MohitTilwani15/whoop-cli/main/insta
 Install a specific version:
 
 ```bash
-WHOOP_CLI_VERSION=v0.1.1 curl -fsSL https://raw.githubusercontent.com/MohitTilwani15/whoop-cli/main/install.sh | sh
+WHOOP_CLI_VERSION=v0.1.0 curl -fsSL https://raw.githubusercontent.com/MohitTilwani15/whoop-cli/main/install.sh | sh
 ```
 
 Install to a custom directory:

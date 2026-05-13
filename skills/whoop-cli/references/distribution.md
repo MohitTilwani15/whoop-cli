@@ -13,7 +13,7 @@ curl -fsSL https://raw.githubusercontent.com/MohitTilwani15/whoop-cli/main/insta
 Specific version:
 
 ```bash
-WHOOP_CLI_VERSION=v0.1.1 curl -fsSL https://raw.githubusercontent.com/MohitTilwani15/whoop-cli/main/install.sh | sh
+WHOOP_CLI_VERSION=v0.1.0 curl -fsSL https://raw.githubusercontent.com/MohitTilwani15/whoop-cli/main/install.sh | sh
 ```
 
 Custom install directory:
@@ -45,7 +45,7 @@ whoop-cli update --json
 Specific version:
 
 ```bash
-whoop-cli update --version v0.1.1 --json
+whoop-cli update --version v0.1.0 --json
 ```
 
 Test safely without overwriting a real binary:
@@ -59,8 +59,8 @@ whoop-cli update --install-dir "$(mktemp -d)" --json
 Release publishing is tag-driven:
 
 ```bash
-git tag v0.1.1
-git push origin v0.1.1
+git tag v0.1.0
+git push origin v0.1.0
 ```
 
 The GitHub Action:
@@ -75,11 +75,11 @@ The GitHub Action:
 Expected asset names:
 
 ```text
-whoop-cli_v0.1.1_darwin_amd64.tar.gz
-whoop-cli_v0.1.1_darwin_arm64.tar.gz
-whoop-cli_v0.1.1_linux_amd64.tar.gz
-whoop-cli_v0.1.1_linux_arm64.tar.gz
-whoop-cli_v0.1.1_windows_amd64.zip
+whoop-cli_v0.1.0_darwin_amd64.tar.gz
+whoop-cli_v0.1.0_darwin_arm64.tar.gz
+whoop-cli_v0.1.0_linux_amd64.tar.gz
+whoop-cli_v0.1.0_linux_arm64.tar.gz
+whoop-cli_v0.1.0_windows_amd64.zip
 checksums.txt
 ```
 

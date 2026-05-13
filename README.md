@@ -126,8 +126,8 @@ whoop-cli workouts list --limit 1 --json
 Create and push a version tag to publish release binaries:
 
 ```bash
-git tag v0.1.1
-git push origin v0.1.1
+git tag v0.1.0
+git push origin v0.1.0
 ```
 
 The release workflow builds macOS, Linux, and Windows archives, injects the tag into `whoop-cli version`, generates `checksums.txt`, and publishes a GitHub Release. The one-line installer and `whoop-cli update` both install from the latest GitHub Release.

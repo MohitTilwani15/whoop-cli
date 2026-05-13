@@ -83,7 +83,7 @@ Use `--config <temp-dir>` when testing feedback so real local feedback files are
 ```bash
 whoop-cli update --check --json
 whoop-cli update --json
-whoop-cli update --version v0.1.1 --json
+whoop-cli update --version v0.1.0 --json
 ```
 
 Use `--install-dir <dir>` in tests to avoid overwriting the running binary.
