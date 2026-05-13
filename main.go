@@ -26,6 +26,12 @@ import (
 
 var version = "dev"
 
+const whoopVersionArt = `__        ___   _  ___   ___  ____  
+\ \      / / | | |/ _ \ / _ \|  _ \ 
+ \ \ /\ / /| |_| | | | | | | | |_) |
+  \ V  V / |  _  | |_| | |_| |  __/ 
+   \_/\_/  |_| |_|\___/ \___/|_|`
+
 type TestEnv struct {
 	ConfigDir   string
 	APIBase     string
@@ -129,7 +135,10 @@ func ExecuteWithEnv(args []string, env TestEnv) (string, string, int) {
 	case "agent-context":
 		return mustJSON(buildAgentContext(env)), "", 0
 	case "version":
-		return mustJSON(map[string]string{"version": version}), "", 0
+		if hasFlag(args, "--json") {
+			return mustJSON(map[string]string{"version": version}), "", 0
+		}
+		return whoopVersionArt + "\n\nwhoop-cli " + version, "", 0
 	case "update":
 		return handleUpdate(args[1:], env)
 	case "workouts":

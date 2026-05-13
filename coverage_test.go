@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -27,6 +28,17 @@ func TestMainFunctionUsesOsExitHook(t *testing.T) {
 func TestRunMainReturnsErrorCode(t *testing.T) {
 	if code := runMain([]string{"does-not-exist"}); code != 2 {
 		t.Fatalf("expected 2, got %d", code)
+	}
+}
+
+func TestVersionOutput(t *testing.T) {
+	stdout, stderr, code := ExecuteWithEnv([]string{"version"}, TestEnv{})
+	if code != 0 || stderr != "" || !strings.Contains(stdout, "whoop-cli ") || !strings.Contains(stdout, `\___/`) {
+		t.Fatalf("expected branded version output, code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	stdout, stderr, code = ExecuteWithEnv([]string{"version", "--json"}, TestEnv{})
+	if code != 0 || stderr != "" || !json.Valid([]byte(stdout)) || !strings.Contains(stdout, `"version"`) {
+		t.Fatalf("expected JSON version output, code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 }
 
