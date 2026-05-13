@@ -167,6 +167,43 @@ go run . feedback list --json
 go test ./...
 ```
 
+## Daily Live E2E
+
+This repo can run a daily real-account smoke test from a home Mac using a GitHub Actions self-hosted runner. GitHub owns the schedule and status UI, while the WHOOP token stays on the Mac.
+
+Runner requirements:
+
+- Register the Mac as a GitHub Actions self-hosted runner for this repo.
+- Add the runner labels `macOS` and `whoop-e2e`.
+- Keep the runner app/service online when the daily job should run.
+- Install `jq`; macOS already includes `curl`, `tar`, and `shasum`.
+
+Local files required on the runner user account:
+
+```bash
+~/.whoop-cli-e2e.env
+~/.config/whoop-cli/token.json
+```
+
+The env file should contain:
+
+```bash
+WHOOP_CLIENT_ID="your-client-id"
+WHOOP_CLIENT_SECRET="your-client-secret"
+```
+
+Create the token file by logging in once on that Mac:
+
+```bash
+whoop-cli auth login \
+  --client-id "$WHOOP_CLIENT_ID" \
+  --client-secret "$WHOOP_CLIENT_SECRET" \
+  --redirect-uri http://localhost:8787/callback \
+  --json
+```
+
+The workflow lives at `.github/workflows/e2e-live.yml`. It runs daily and can also be started manually from the GitHub Actions tab. It installs the latest release into a temp directory, refreshes the local WHOOP token, tests all live read commands, exercises update/install behavior, and keeps WHOOP response bodies out of the logs.
+
 ## Next implementation steps
 
 1. Add profile save/list/get/delete.

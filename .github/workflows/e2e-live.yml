@@ -1,0 +1,25 @@
+name: live e2e
+
+on:
+  schedule:
+    - cron: "15 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: whoop-cli-live-e2e
+  cancel-in-progress: false
+
+jobs:
+  live-e2e:
+    runs-on: [self-hosted, macOS, whoop-e2e]
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run live release E2E
+        shell: bash
+        run: scripts/e2e-live-release.sh
