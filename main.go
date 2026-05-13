@@ -1209,8 +1209,21 @@ func updateFlags() map[string]any {
 	return f
 }
 
-func mustJSON(v any) string       { b, _ := json.MarshalIndent(v, "", "  "); return string(b) }
-func compactJSON(v any) string    { b, _ := json.Marshal(v); return string(b) }
+func mustJSON(v any) string {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	_ = enc.Encode(v)
+	return strings.TrimSuffix(buf.String(), "\n")
+}
+func compactJSON(v any) string {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	_ = enc.Encode(v)
+	return strings.TrimSuffix(buf.String(), "\n")
+}
 func errorJSON(e CLIError) string { return mustJSON(ErrorEnvelope{Error: e}) }
 func hasFlag(args []string, flag string) bool {
 	for _, a := range args {

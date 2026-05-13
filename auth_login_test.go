@@ -28,6 +28,9 @@ func TestAuthLoginPrintURLBuildsWhoopAuthorizeURL(t *testing.T) {
 	if u.Host != "api.prod.whoop.com" || u.Path != "/oauth/oauth2/auth" {
 		t.Fatalf("bad auth URL: %s", authURL)
 	}
+	if strings.Contains(stdout, `\u0026`) || !strings.Contains(stdout, "&redirect_uri=") {
+		t.Fatalf("authorization_url should be copy-pasteable without escaped ampersands: %s", stdout)
+	}
 	q := u.Query()
 	if q.Get("client_id") != "cid" || q.Get("redirect_uri") != "http://localhost:8787/callback" || q.Get("scope") != "read:profile read:sleep" || q.Get("state") != "abcdefgh" || q.Get("response_type") != "code" {
 		t.Fatalf("bad query: %s", u.RawQuery)
