@@ -105,5 +105,5 @@ commands:
   feedback.list:
     local_jsonl: read
   update:
-    endpoint: GET https://api.github.com/repos/mohittilwani/whoop-cli/releases/latest
+    endpoint: GET https://api.github.com/repos/MohitTilwani15/whoop-cli/releases/latest
     verifies_checksums: true

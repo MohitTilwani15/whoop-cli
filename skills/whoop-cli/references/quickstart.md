@@ -35,19 +35,19 @@ go run . agent-context
 The release installer downloads a GitHub Release archive, verifies `checksums.txt`, and installs `whoop-cli` to `~/.local/bin` by default.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mohittilwani/whoop-cli/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/MohitTilwani15/whoop-cli/main/install.sh | sh
 ```
 
 Install a specific version:
 
 ```bash
-WHOOP_CLI_VERSION=v0.1.1 curl -fsSL https://raw.githubusercontent.com/mohittilwani/whoop-cli/main/install.sh | sh
+WHOOP_CLI_VERSION=v0.1.1 curl -fsSL https://raw.githubusercontent.com/MohitTilwani15/whoop-cli/main/install.sh | sh
 ```
 
 Install to a custom directory:
 
 ```bash
-WHOOP_CLI_INSTALL_DIR=/usr/local/bin curl -fsSL https://raw.githubusercontent.com/mohittilwani/whoop-cli/main/install.sh | sh
+WHOOP_CLI_INSTALL_DIR=/usr/local/bin curl -fsSL https://raw.githubusercontent.com/MohitTilwani15/whoop-cli/main/install.sh | sh
 ```
 
 Developer install:

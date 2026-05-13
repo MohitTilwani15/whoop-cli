@@ -793,7 +793,7 @@ func retryDelay(header http.Header) time.Duration {
 }
 
 func handleUpdate(args []string, env TestEnv) (string, string, int) {
-	repo := firstNonEmpty(flagValue(args, "--repo"), "mohittilwani/whoop-cli")
+	repo := firstNonEmpty(flagValue(args, "--repo"), "MohitTilwani15/whoop-cli")
 	targetVersion := firstNonEmpty(flagValue(args, "--version"), "latest")
 	releaseURL := flagValue(args, "--release-url")
 	installDir := flagValue(args, "--install-dir")
@@ -1204,7 +1204,7 @@ func updateFlags() map[string]any {
 	f := dataFlags()
 	f["--check"] = map[string]any{"type": "bool"}
 	f["--version"] = map[string]any{"type": "string"}
-	f["--repo"] = map[string]any{"type": "string", "default": "mohittilwani/whoop-cli"}
+	f["--repo"] = map[string]any{"type": "string", "default": "MohitTilwani15/whoop-cli"}
 	f["--install-dir"] = map[string]any{"type": "string"}
 	return f
 }

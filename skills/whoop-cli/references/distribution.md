@@ -7,19 +7,19 @@ Use this reference for install, update, GitHub Releases, and release diagnostics
 One-line install:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mohittilwani/whoop-cli/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/MohitTilwani15/whoop-cli/main/install.sh | sh
 ```
 
 Specific version:
 
 ```bash
-WHOOP_CLI_VERSION=v0.1.1 curl -fsSL https://raw.githubusercontent.com/mohittilwani/whoop-cli/main/install.sh | sh
+WHOOP_CLI_VERSION=v0.1.1 curl -fsSL https://raw.githubusercontent.com/MohitTilwani15/whoop-cli/main/install.sh | sh
 ```
 
 Custom install directory:
 
 ```bash
-WHOOP_CLI_INSTALL_DIR="$HOME/bin" curl -fsSL https://raw.githubusercontent.com/mohittilwani/whoop-cli/main/install.sh | sh
+WHOOP_CLI_INSTALL_DIR="$HOME/bin" curl -fsSL https://raw.githubusercontent.com/MohitTilwani15/whoop-cli/main/install.sh | sh
 ```
 
 The installer expects:

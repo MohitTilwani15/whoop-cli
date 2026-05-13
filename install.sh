@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-repo="${WHOOP_CLI_REPO:-mohittilwani/whoop-cli}"
+repo="${WHOOP_CLI_REPO:-MohitTilwani15/whoop-cli}"
 version="${WHOOP_CLI_VERSION:-latest}"
 install_dir="${WHOOP_CLI_INSTALL_DIR:-$HOME/.local/bin}"
 bin_name="whoop-cli"
