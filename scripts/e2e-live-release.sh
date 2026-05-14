@@ -5,6 +5,11 @@ REPO="${WHOOP_CLI_E2E_REPO:-MohitTilwani15/whoop-cli}"
 INSTALL_URL="${WHOOP_CLI_E2E_INSTALL_URL:-https://raw.githubusercontent.com/$REPO/main/install.sh}"
 ENV_FILE="${WHOOP_CLI_E2E_ENV:-$HOME/.whoop-cli-e2e.env}"
 TOKEN_FILE="${WHOOP_CLI_E2E_TOKEN:-$HOME/.config/whoop-cli/token.json}"
+PATH="$HOME/.local/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
+export PATH
+LC_ALL=C
+LANG=C
+export LC_ALL LANG
 
 tmp="${TMPDIR:-/tmp}/whoop-cli-live-e2e.$$"
 bin_dir="$tmp/bin"
