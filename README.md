@@ -2,6 +2,11 @@
 
 Agent-native CLI for the WHOOP Developer API.
 
+> [!IMPORTANT]
+> This project was built using AI, but the CLI has been tested against the real WHOOP API and now has daily live E2E coverage running from a real account.
+>
+> This project was built primarily for my personal use, so I may not merge pull requests or add features unless I need them myself. If you want to make changes or add features, feel free to fork this repository.
+
 ## Agent-native rules
 
 - Use `--json` for data output. Do not use `--format=json`.
