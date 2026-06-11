@@ -24,7 +24,7 @@ func TestAuthRefreshUsesSavedRefreshTokenAndRotatesTokenFile(t *testing.T) {
 		if err := r.ParseForm(); err != nil {
 			t.Fatal(err)
 		}
-		if r.Form.Get("grant_type") != "refresh_token" || r.Form.Get("refresh_token") != "old-refresh" || r.Form.Get("client_id") != "cid" || r.Form.Get("client_secret") != "secret" {
+		if r.Form.Get("grant_type") != "refresh_token" || r.Form.Get("refresh_token") != "old-refresh" || r.Form.Get("client_id") != "cid" || r.Form.Get("client_secret") != "secret" || r.Form.Get("scope") != "offline" {
 			t.Fatalf("bad refresh form: %#v", r.Form)
 		}
 		_, _ = w.Write([]byte(`{"access_token":"new-access","refresh_token":"new-refresh","expires_in":3600,"token_type":"bearer","scope":"read:profile"}`))

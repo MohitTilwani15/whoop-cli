@@ -465,6 +465,8 @@ func exchangeRefreshTokenWithEnv(env TestEnv, tokenURL, clientID, clientSecret, 
 	form.Set("refresh_token", refreshToken)
 	form.Set("client_id", clientID)
 	form.Set("client_secret", clientSecret)
+	// WHOOP's refresh-token endpoint requires an explicit offline scope.
+	// Sending the full previously granted scope currently returns invalid_request.
 	form.Set("scope", "offline")
 	return exchangeTokenFormWithEnv(env, tokenURL, form)
 }
