@@ -58,9 +58,10 @@ func TestHelpAndUnknownCommands(t *testing.T) {
 }
 
 func TestAuthBranches(t *testing.T) {
+	configDir := t.TempDir()
 	cases := [][]string{{"auth"}, {"auth", "status", "--json"}, {"auth", "login", "--json"}, {"auth", "refresh", "--json"}, {"auth", "logout", "--json"}, {"auth", "revoke", "--force", "--json"}, {"auth", "wat", "--json"}}
 	for _, args := range cases {
-		ExecuteWithEnv(args, TestEnv{})
+		ExecuteWithEnv(args, TestEnv{ConfigDir: configDir})
 	}
 }
 
